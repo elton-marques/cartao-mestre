@@ -96,6 +96,31 @@ function clickableRow(extraClass) {
   return btn;
 }
 
+/** Painéis de dropdown (filtros, exportar, mais opções, conta) nascem
+ * `position:absolute` ancorados em `left-0` ou `right-0` do próprio botão —
+ * em telas largas isso sempre cabe, mas em celular um botão perto da borda
+ * direita gera um painel que nasce cortado (ou empurra a página inteira
+ * pra rolar na horizontal). Mede depois de montado e troca a âncora / limita
+ * a largura só quando realmente vaza da viewport. */
+function clampDropdownPanel(panel) {
+  requestAnimationFrame(() => {
+    const margin = 8;
+    const rect = panel.getBoundingClientRect();
+    if (rect.right > window.innerWidth - margin) {
+      panel.style.left = 'auto';
+      panel.style.right = '0';
+    }
+    const rect2 = panel.getBoundingClientRect();
+    if (rect2.width > window.innerWidth - margin * 2) {
+      panel.style.maxWidth = `calc(100vw - ${margin * 2}px)`;
+    }
+    if (rect2.left < margin) {
+      panel.style.left = `${margin}px`;
+      panel.style.right = 'auto';
+    }
+  });
+}
+
 // ---------------------------------------------------------------- KPIs
 
 const KPI_SPECS = [
@@ -249,22 +274,27 @@ function renderHeatmap(container, { matrix, max }, filters, onCellClick, onDayCl
   // no index.html) pra caber as 4 faixas sem precisar de scroll.
   const table = el('div', 'w-full');
 
-  const header = el('div', 'grid grid-cols-[90px_repeat(6,1fr)] gap-1.5 mb-2.5');
+  const header = el('div', 'grid grid-cols-[64px_repeat(6,1fr)] sm:grid-cols-[90px_repeat(6,1fr)] gap-1 sm:gap-1.5 mb-2.5');
   header.appendChild(el('div', ''));
   for (const b of HORA_BANDS) {
     const cell = el('div', 'text-center leading-tight');
-    cell.appendChild(el('p', 'text-[11px] text-white/60 font-medium whitespace-nowrap', b.short));
-    cell.appendChild(el('p', 'text-[10px] text-white/35 whitespace-nowrap', b.range));
+    // Sem whitespace-nowrap: em telas estreitas (card ocupa 100% da largura,
+    // vira 1 coluna) rótulos como "Fim de tarde" precisam poder quebrar em
+    // 2 linhas dentro da coluna de ~48px, senão vazam pra cima da vizinha.
+    // A faixa de horário (ex.: "16:00–18:00") some abaixo de sm: mesmo
+    // encolhendo a fonte, não cabe nessa largura sem sobrepor.
+    cell.appendChild(el('p', 'text-[10px] sm:text-[11px] text-white/60 font-medium', b.short));
+    cell.appendChild(el('p', 'hidden sm:block text-[10px] text-white/35 whitespace-nowrap', b.range));
     header.appendChild(cell);
   }
   table.appendChild(header);
 
   let delay = 0;
   for (const row of matrix) {
-    const rowEl = el('div', 'grid grid-cols-[90px_repeat(6,1fr)] gap-1.5 mb-1.5');
+    const rowEl = el('div', 'grid grid-cols-[64px_repeat(6,1fr)] sm:grid-cols-[90px_repeat(6,1fr)] gap-1 sm:gap-1.5 mb-1.5');
     const isDayActive = filters.weekday === row.day && !filters.band;
     const dayBtn = clickableRow(
-      `flex items-center rounded-md px-1.5 -mx-1.5 text-sm transition-colors duration-150 hover:bg-white/5 ${
+      `flex items-center rounded-md px-1.5 -mx-1.5 text-xs sm:text-sm truncate transition-colors duration-150 hover:bg-white/5 ${
         isDayActive ? 'text-white font-semibold bg-white/10' : 'text-white/80'
       }`
     );
@@ -305,9 +335,12 @@ function renderHeatmap(container, { matrix, max }, filters, onCellClick, onDayCl
  * modal de tendência) e "dia da semana" (heatmap): um pico num dia específico
  * do calendário. Mesmo gráfico de linha do modal de tendência, reaproveitado
  * com uma cor própria pra não confundir com o de mês. */
-function renderDailyCard(container, dailyData, filters, onSelectDay) {
+function renderDailyCard(container, dailyData, filters, onSelectDay, onSelectRange) {
   container.innerHTML = '';
-  container.appendChild(cardHeader('Liberações por dia', 'Passe o mouse pra ver a data exata, clique num ponto pra filtrar o dashboard só por aquele dia'));
+  container.appendChild(cardHeader(
+    'Liberações por dia',
+    'Clique num ponto pra filtrar só aquele dia, ou segure e arraste pra marcar um período — depois ajuste puxando as alças nas pontas da seleção.'
+  ));
 
   if (dailyData.length === 0) {
     container.appendChild(el('p', 'text-sm text-white/40', 'Sem liberações para os filtros selecionados.'));
@@ -317,7 +350,27 @@ function renderDailyCard(container, dailyData, filters, onSelectDay) {
   const total = dailyData.reduce((s, d) => s + d.count, 0);
   const media = Math.round((total / dailyData.length) * 10) / 10;
   const pico = dailyData.reduce((m, d) => (d.count > m.count ? d : m), dailyData[0]);
-  container.appendChild(el('p', 'text-sm text-white/50 mb-3', `${fmtInt(dailyData.length)} dia(s) com uso · média de ${media} liberações/dia · pico em ${pico.data} (${fmtInt(pico.count)})`));
+  const resumo = el('p', 'text-sm text-white/50 mb-3', `${fmtInt(dailyData.length)} dia(s) com uso · média de ${media} liberações/dia · pico em ${pico.data} (${fmtInt(pico.count)})`);
+  container.appendChild(resumo);
+
+  // Pílula com o período marcado (arraste) + atalho pra limpar — o chip
+  // "Período: ..." já existe na barra de filtros ativos lá em cima, mas essa
+  // aqui fica junto do gráfico, onde a seleção foi feita, pra fechar o loop
+  // sem precisar rolar até o topo.
+  if (filters.periodoInicio && filters.periodoFim) {
+    const pill = el('div', 'flex items-center gap-2 mb-3');
+    const label = filters.periodoInicio === filters.periodoFim
+      ? `Dia selecionado: ${filters.periodoInicio}`
+      : `Período selecionado: ${filters.periodoInicio} – ${filters.periodoFim}`;
+    const badge = el('button', 'flex items-center gap-1.5 text-xs font-medium pl-3 pr-2 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/25 text-emerald-200 hover:bg-emerald-500/25 transition-colors duration-150');
+    badge.type = 'button';
+    badge.appendChild(el('span', '', label));
+    badge.appendChild(el('span', 'text-emerald-200/60', '×'));
+    badge.title = 'Limpar seleção de período';
+    badge.addEventListener('click', () => onSelectRange('', ''));
+    pill.appendChild(badge);
+    container.appendChild(pill);
+  }
 
   // Altura fixa em CSS, mas o SVG interno usa o tamanho real do container
   // (ver renderLineChart) — é isso que evita o gráfico esticado/distorcido.
@@ -338,7 +391,17 @@ function renderDailyCard(container, dailyData, filters, onSelectDay) {
     monthKey: d.dateObj ? `${d.dateObj.getFullYear()}-${d.dateObj.getMonth()}` : null,
     monthLabel: d.dateObj ? MESES_ABREV_ANO[d.dateObj.getMonth()] : null,
   }));
-  renderLineChart(chartWrap, chartData, { color: '#34d399', onSelect: onSelectDay, activeKey: filters.data, labelEvery });
+  renderLineChart(chartWrap, chartData, {
+    color: '#34d399',
+    onSelect: onSelectDay,
+    activeKey: filters.data,
+    labelEvery,
+    rangeSelect: {
+      start: filters.periodoInicio || null,
+      end: filters.periodoFim || null,
+      onChange: onSelectRange,
+    },
+  });
 }
 
 // ------------------------------------------------------------- Motivo
@@ -1006,7 +1069,14 @@ function legendDot(colorClass, label) {
  * "none" antigo) — é isso que evita o gráfico ficar desproporcional: 1 unidade
  * do viewBox passa a valer exatamente 1px renderizado, então nada é esticado
  * de forma não-uniforme (nem os traços, nem o texto dos rótulos). */
-function renderLineChart(container, data, { color = '#60a5fa', onSelect, activeKey, labelEvery = 1 } = {}) {
+/** `rangeSelect` (opcional): liga a seleção de período por arraste — `{ start,
+ * end, onChange(startKey, endKey) }`. `start`/`end` são as `key` do ponto
+ * atualmente selecionado (ou null); `onChange` é chamado ao soltar o mouse,
+ * já com as pontas ordenadas cronologicamente. Quando ligado, troca as zonas
+ * de clique por-ponto por uma única camada de interação (arraste novo,
+ * arraste das alças nas pontas de uma seleção existente, ou clique simples
+ * sem arrastar — que continua chamando `onSelect`, igual antes). */
+function renderLineChart(container, data, { color = '#60a5fa', onSelect, activeKey, labelEvery = 1, rangeSelect } = {}) {
   container.innerHTML = '';
   container.style.position = 'relative';
   const rect = container.getBoundingClientRect();
@@ -1088,8 +1158,19 @@ function renderLineChart(container, data, { color = '#60a5fa', onSelect, activeK
   };
   const hideTip = () => tip.classList.add('hidden');
 
+  // Índice do ponto mais próximo de uma `key` já commitada (seleção vinda do
+  // state.filters) — -1 quando não achar (ex.: dia fora do recorte atual).
+  const idxForKey = (key) => pts.findIndex((p) => p.key === key);
+  let selStartIdx = -1, selEndIdx = -1;
+  if (rangeSelect) {
+    if (rangeSelect.start) selStartIdx = idxForKey(rangeSelect.start);
+    if (rangeSelect.end) selEndIdx = idxForKey(rangeSelect.end);
+    if (selStartIdx > -1 && selEndIdx > -1 && selStartIdx > selEndIdx) [selStartIdx, selEndIdx] = [selEndIdx, selStartIdx];
+  }
+
   pts.forEach((p, i) => {
-    const isActive = activeKey === p.key;
+    const inSelection = rangeSelect && selStartIdx > -1 && selEndIdx > -1 && i >= selStartIdx && i <= selEndIdx;
+    const isActive = activeKey === p.key || inSelection;
     const dot = svgEl('circle', { cx: p.x, cy: p.y, r: isActive ? 5.5 : 4, fill: color, stroke: '#0a0a0b', 'stroke-width': 2 });
     svg.appendChild(dot);
 
@@ -1099,13 +1180,141 @@ function renderLineChart(container, data, { color = '#60a5fa', onSelect, activeK
       svg.appendChild(label);
     }
 
-    const zoneW = n > 1 ? innerW / (n - 1) : innerW;
-    const zone = svgEl('rect', { x: p.x - zoneW / 2, y: 0, width: zoneW, height, fill: 'transparent', style: 'cursor:pointer' });
-    zone.addEventListener('mouseenter', () => showTip(p));
-    zone.addEventListener('mouseleave', hideTip);
-    zone.addEventListener('click', () => onSelect && onSelect(p.key));
-    svg.appendChild(zone);
+    // Sem `rangeSelect`: zona de clique/hover por ponto, igual sempre foi
+    // (usada pelo modal de tendência, que não precisa de arraste).
+    if (!rangeSelect) {
+      const zoneW = n > 1 ? innerW / (n - 1) : innerW;
+      const zone = svgEl('rect', { x: p.x - zoneW / 2, y: 0, width: zoneW, height, fill: 'transparent', style: 'cursor:pointer' });
+      zone.addEventListener('mouseenter', () => showTip(p));
+      zone.addEventListener('mouseleave', hideTip);
+      zone.addEventListener('click', () => onSelect && onSelect(p.key));
+      svg.appendChild(zone);
+    }
   });
+
+  // ---------------------------------------------- seleção de período (arraste)
+  if (rangeSelect && pts.length) {
+    const HANDLE_W = 10;
+
+    const shade = svgEl('rect', {
+      x: 0, y: padding.top, width: 0, height: innerH,
+      fill: color, 'fill-opacity': 0.14, stroke: color, 'stroke-opacity': 0.45, 'stroke-width': 1,
+      visibility: 'hidden',
+    });
+    svg.appendChild(shade);
+
+    const updateShade = (i1, i2) => {
+      if (i1 < 0 || i2 < 0) { shade.setAttribute('visibility', 'hidden'); return; }
+      const lo = Math.min(i1, i2), hi = Math.max(i1, i2);
+      shade.setAttribute('x', pts[lo].x);
+      shade.setAttribute('width', Math.max(0, pts[hi].x - pts[lo].x));
+      shade.setAttribute('visibility', 'visible');
+    };
+    updateShade(selStartIdx, selEndIdx);
+
+    // Camada de interação: cobre toda a área do gráfico — começa um arraste
+    // novo (clique fora das alças) e mostra o tooltip de hover quando não há
+    // arraste em andamento (substitui as zonas por-ponto de cima, que ficam
+    // desligadas nesse modo). Precisa entrar no SVG ANTES das alças abaixo:
+    // em SVG quem fica por último no documento é quem recebe o clique
+    // primeiro, e as alças (bem mais estreitas) têm que vencer essa
+    // sobreposição pra dar pra arrastar só a ponta.
+    const overlay = svgEl('rect', { x: padding.left, y: 0, width: Math.max(0, innerW), height, fill: 'transparent', style: 'cursor: crosshair' });
+    svg.appendChild(overlay);
+
+    // Alças ("puxar as barras dos cantos") — ficam por cima do overlay, uma
+    // em cada ponta da seleção; arrastar uma delas ajusta só aquela ponta.
+    const makeHandle = () => {
+      const h = svgEl('rect', {
+        x: 0, y: padding.top - 4, width: HANDLE_W, height: innerH + 8, rx: 3,
+        fill: color, stroke: '#0a0a0b', 'stroke-width': 1.5,
+        visibility: 'hidden', style: 'cursor: ew-resize',
+      });
+      svg.appendChild(h);
+      return h;
+    };
+    const handleStart = makeHandle();
+    const handleEnd = makeHandle();
+    const positionHandles = (i1, i2) => {
+      if (i1 < 0 || i2 < 0) { handleStart.setAttribute('visibility', 'hidden'); handleEnd.setAttribute('visibility', 'hidden'); return; }
+      const lo = Math.min(i1, i2), hi = Math.max(i1, i2);
+      handleStart.setAttribute('x', pts[lo].x - HANDLE_W / 2);
+      handleEnd.setAttribute('x', pts[hi].x - HANDLE_W / 2);
+      handleStart.setAttribute('visibility', 'visible');
+      handleEnd.setAttribute('visibility', 'visible');
+    };
+    positionHandles(selStartIdx, selEndIdx);
+
+    const xToIdx = (clientX) => {
+      const r = container.getBoundingClientRect();
+      const localX = clientX - r.left;
+      const idx = Math.round((localX - padding.left) / (stepX || 1));
+      return Math.min(n - 1, Math.max(0, idx));
+    };
+    const clientXOf = (e) => (e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX);
+
+    let dragMode = null; // 'new' | 'start' | 'end' | null
+    let dragOriginIdx = -1;
+    let dragMoved = false;
+    let curStart = selStartIdx, curEnd = selEndIdx;
+
+    const onMove = (e) => {
+      if (!dragMode) return;
+      const idx = xToIdx(clientXOf(e));
+      if (idx !== dragOriginIdx) dragMoved = true;
+      if (dragMode === 'new') { curStart = dragOriginIdx; curEnd = idx; }
+      else if (dragMode === 'start') curStart = idx;
+      else curEnd = idx;
+      updateShade(curStart, curEnd);
+      positionHandles(curStart, curEnd);
+      hideTip();
+      if (e.cancelable) e.preventDefault();
+    };
+
+    const endDrag = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', endDrag);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', endDrag);
+      if (dragMode === 'new' && !dragMoved) {
+        // Não arrastou de fato: mantém o comportamento antigo de clique único.
+        if (onSelect) onSelect(pts[dragOriginIdx].key);
+        updateShade(selStartIdx, selEndIdx);
+        positionHandles(selStartIdx, selEndIdx);
+      } else if (dragMoved) {
+        const lo = Math.min(curStart, curEnd), hi = Math.max(curStart, curEnd);
+        rangeSelect.onChange(pts[lo].key, pts[hi].key);
+      }
+      dragMode = null;
+      dragMoved = false;
+    };
+
+    const startDrag = (mode, e) => {
+      dragMode = mode;
+      dragMoved = false;
+      dragOriginIdx = xToIdx(clientXOf(e));
+      if (mode === 'start') curStart = dragOriginIdx;
+      if (mode === 'end') curEnd = dragOriginIdx;
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', endDrag);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', endDrag);
+      if (e.cancelable) e.preventDefault();
+    };
+
+    handleStart.addEventListener('mousedown', (e) => { e.stopPropagation(); startDrag('start', e); });
+    handleStart.addEventListener('touchstart', (e) => { e.stopPropagation(); startDrag('start', e); }, { passive: false });
+    handleEnd.addEventListener('mousedown', (e) => { e.stopPropagation(); startDrag('end', e); });
+    handleEnd.addEventListener('touchstart', (e) => { e.stopPropagation(); startDrag('end', e); }, { passive: false });
+
+    overlay.addEventListener('mousedown', (e) => startDrag('new', e));
+    overlay.addEventListener('touchstart', (e) => startDrag('new', e), { passive: false });
+    overlay.addEventListener('mousemove', (e) => {
+      if (dragMode) return; // durante o arraste quem cuida disso é o onMove (document)
+      showTip(pts[xToIdx(e.clientX)]);
+    });
+    overlay.addEventListener('mouseleave', () => { if (!dragMode) hideTip(); });
+  }
 
   container.appendChild(svg);
   container.appendChild(tip);
@@ -1281,6 +1490,7 @@ function renderMoreOptions(container, { isOpen, onToggle, showOrfaosCard, onTogg
   panel.appendChild(el('p', 'text-xs text-white/40 px-2.5 pt-1.5', 'Matrículas sem cadastro na base de dados — sempre contam no total, isso só decide se o card aparece.'));
 
   container.appendChild(panel);
+  clampDropdownPanel(panel);
 }
 
 // ------------------------------------------------------------- Menu de exportação
@@ -1325,6 +1535,7 @@ function renderExportMenu(container, { isOpen, onToggle, onExportCSV, onExportEx
   panel.appendChild(el('p', 'text-[11px] text-white/30 px-3 pt-1.5', 'Sempre respeita os filtros ativos na tela.'));
 
   container.appendChild(panel);
+  clampDropdownPanel(panel);
 }
 
 // -------------------------------------------------------------- Menu de conta
@@ -1386,6 +1597,7 @@ function renderAccountMenu(container, { isOpen, username, onToggle, onSwitchAcco
   panel.appendChild(menuItem(ICON_LOGOUT, 'Sair', onLogout));
 
   container.appendChild(panel);
+  clampDropdownPanel(panel);
 }
 
 // --------------------------------------------------------------- Filtros (dropdowns)
@@ -1427,4 +1639,5 @@ function renderFilterDropdown(container, { value, options, placeholder, isOpen, 
   }
 
   container.appendChild(panel);
+  clampDropdownPanel(panel);
 }

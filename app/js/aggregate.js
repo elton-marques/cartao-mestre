@@ -27,6 +27,13 @@ const HORA_BANDS = [
 ];
 
 function applyFilters(records, filters) {
+  // Calculados 1x fora do loop (não por registro): filtro de período (arraste
+  // no gráfico "Liberações por dia") guarda as pontas como string dd/mm/aaaa
+  // igual a `r.data`, mas a comparação precisa ser por data real (pra cobrir
+  // todos os dias entre as pontas, não só bater a string exata).
+  const periodoIniTs = filters.periodoInicio ? parseDateBR(filters.periodoInicio)?.getTime() : null;
+  const periodoFimTs = filters.periodoFim ? parseDateBR(filters.periodoFim)?.getTime() : null;
+
   return records.filter((r) => {
     if (filters.mes && r.mes !== filters.mes) return false;
     if (filters.setor && r.setor !== filters.setor) return false;
@@ -34,6 +41,15 @@ function applyFilters(records, filters) {
     if (filters.aprovador && r.aprovador !== filters.aprovador) return false;
     if (filters.weekday && r.weekday !== filters.weekday) return false;
     if (filters.data && r.data !== filters.data) return false;
+    if (periodoIniTs != null || periodoFimTs != null) {
+      // Mesmo critério do dailyTrend (que alimenta o gráfico de onde esse
+      // filtro nasce): ignora data suspeita, senão ela pode entrar/sair do
+      // período por acaso e o total não bate com o que o gráfico mostrou.
+      if (!r.dateObj || r.suspiciousDate) return false;
+      const t = r.dateObj.getTime();
+      if (periodoIniTs != null && t < periodoIniTs) return false;
+      if (periodoFimTs != null && t > periodoFimTs) return false;
+    }
     if (filters.band) {
       const bandDef = HORA_BANDS.find((b) => b.key === filters.band);
       if (r.minutesOfDay == null || !bandDef.test(r.minutesOfDay)) return false;
@@ -59,6 +75,15 @@ function describeFilters(filters) {
   if (filters.aprovador) chips.push({ key: 'aprovador', label: `Gestor: ${filters.aprovador}` });
   if (filters.weekday) chips.push({ key: 'weekday', label: `Dia da semana: ${filters.weekday}` });
   if (filters.data) chips.push({ key: 'data', label: `Data: ${filters.data}` });
+  if (filters.periodoInicio && filters.periodoFim) {
+    const curto = (d) => d.split('/').slice(0, 2).join('/'); // dd/mm/aaaa -> dd/mm
+    chips.push({
+      key: 'periodo',
+      label: filters.periodoInicio === filters.periodoFim
+        ? `Data: ${filters.periodoInicio}`
+        : `Período: ${curto(filters.periodoInicio)} – ${curto(filters.periodoFim)}`,
+    });
+  }
   if (filters.band) {
     const bandDef = HORA_BANDS.find((b) => b.key === filters.band);
     chips.push({ key: 'band', label: `Horário: ${bandDef ? bandDef.label : filters.band}` });

@@ -9,7 +9,10 @@ const state = {
   // é uma liberação real, só sem cadastro em COLABORADORES.csv (que pode
   // estar desatualizada) — por isso sempre entra no total, sem opção de
   // excluir. `onlyOrfaos` (drill-down "ver só as órfãs") continua existindo.
-  filters: { mes: '', setor: '', motivo: '', aprovador: '', weekday: '', data: '', band: '', matricula: '', nomeSemMatricula: '', onlyUnauthorized: false, onlyOrfaos: false },
+  // periodoInicio/periodoFim (dd/mm/aaaa, ambos ou nenhum): seleção de período por
+  // arraste no gráfico "Liberações por dia" (ver renderDailyCard/renderLineChart)
+  // — mutuamente exclusivo com `data` (dia único clicado no mesmo gráfico).
+  filters: { mes: '', setor: '', motivo: '', aprovador: '', weekday: '', data: '', periodoInicio: '', periodoFim: '', band: '', matricula: '', nomeSemMatricula: '', onlyUnauthorized: false, onlyOrfaos: false },
   dataset: null, // { records, duplicatesRemoved }
   colabQuery: '', // busca do card "Colaboradores" — não é um filtro do dashboard, só narrows essa lista
   paletteOpen: false,
@@ -73,20 +76,35 @@ function setFilter(field, value) {
 function clearFilter(field) {
   if (field === 'weekday') { state.filters.weekday = ''; state.filters.band = ''; }
   else if (field === 'band') { state.filters.band = ''; }
+  else if (field === 'periodo') { state.filters.periodoInicio = ''; state.filters.periodoFim = ''; }
   else if (field === 'onlyUnauthorized' || field === 'onlyOrfaos') state.filters[field] = false;
   else state.filters[field] = '';
   renderAll();
 }
 
 function clearAllFilters() {
-  Object.assign(state.filters, { mes: '', setor: '', motivo: '', aprovador: '', weekday: '', data: '', band: '', matricula: '', nomeSemMatricula: '', onlyUnauthorized: false, onlyOrfaos: false });
+  Object.assign(state.filters, { mes: '', setor: '', motivo: '', aprovador: '', weekday: '', data: '', periodoInicio: '', periodoFim: '', band: '', matricula: '', nomeSemMatricula: '', onlyUnauthorized: false, onlyOrfaos: false });
   renderAll();
 }
 
 /** Clique num ponto do gráfico "Liberações por dia" — filtra por aquele dia
- * exato (toggle: clicar de novo no mesmo dia limpa). */
+ * exato (toggle: clicar de novo no mesmo dia limpa). Mutuamente exclusivo com
+ * o filtro de período (arraste no mesmo gráfico) — escolher um dia único
+ * limpa um período que estivesse selecionado. */
 function onDiaClick(data) {
+  state.filters.periodoInicio = '';
+  state.filters.periodoFim = '';
   setFilter('data', data);
+}
+
+/** Arraste (ou ajuste das alças nas pontas) no gráfico "Liberações por dia" —
+ * filtra o dashboard inteiro pelo período dd/mm/aaaa..dd/mm/aaaa (inclusive
+ * nas duas pontas). Mutuamente exclusivo com o filtro de dia único. */
+function onDiaRangeSelect(inicio, fim) {
+  state.filters.data = '';
+  state.filters.periodoInicio = inicio;
+  state.filters.periodoFim = fim;
+  renderAll();
 }
 
 /** Liga/desliga só a VISIBILIDADE do card "Matrícula órfã" (popover "Mais
@@ -423,8 +441,14 @@ function renderColaboradoresCard() {
 function renderDiaCard() {
   const e = els();
   const { records } = state.dataset;
-  const filtered = applyFilters(records, state.filters);
-  renderDailyCard(e.dia, dailyTrend(filtered), state.filters, onDiaClick);
+  // Ignora o próprio filtro de data/período pro cálculo dos PONTOS do gráfico
+  // (mesmo princípio do filtersNoMes no modal de tendência) — os outros filtros
+  // (setor, motivo, gestor...) continuam valendo. Sem isso, depois de marcar um
+  // período o gráfico passaria a mostrar só os dias já dentro dele, e não
+  // haveria mais o resto da linha do tempo pra arrastar as alças e reajustar.
+  const filtersNoData = { ...state.filters, data: '', periodoInicio: '', periodoFim: '' };
+  const filteredForChart = applyFilters(records, filtersNoData);
+  renderDailyCard(e.dia, dailyTrend(filteredForChart), state.filters, onDiaClick, onDiaRangeSelect);
 }
 
 function renderMotivoCard() {
