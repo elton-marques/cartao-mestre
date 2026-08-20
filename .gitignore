@@ -1,0 +1,21 @@
+# Dados sensíveis (nomes, matrículas, setor de funcionários) — não versionar
+dados/csv/*.csv
+
+# Claude Code local settings (machine-specific, not shared)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Instruções locais do Claude Code pra este projeto — mantido só localmente,
+# nunca publicado no GitHub (a pedido, por precaução).
+CLAUDE.md
+
+# Credenciais da VPS (chave SSH + host) — nunca versionar.
+deploy/.vps.env
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
