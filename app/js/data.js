@@ -1,20 +1,30 @@
 /**
  * Carregamento e limpeza (ETL) dos CSVs em dados/csv/.
- * Ver plano: app/README.md
+ * Ver app/README.md para as decisões de limpeza.
  */
+
+// Onde os CSVs são procurados, na ordem. `dados/csv/` guarda os arquivos
+// reais e não é versionado; `dados/csv-exemplo/` traz um conjunto
+// fictício de mesmo formato, que é o que roda em quem só clonou o repo.
+const DATA_DIRS = ['../dados/csv/', '../dados/csv-exemplo/'];
 
 // Para adicionar um novo mês: solte o CSV em dados/csv/ e acrescente UMA
 // linha aqui (nessa ordem cronológica). O resto do dashboard (filtro de
 // período, tendência mensal, KPIs, etc.) se ajusta sozinho — não precisa
 // tocar em mais nenhum arquivo.
 const MONTHLY_FILES = [
-  { path: '../dados/csv/JANEIRO.csv', mes: 'Janeiro' },
-  { path: '../dados/csv/FEVEVEIRO.csv', mes: 'Fevereiro' }, // nome do arquivo-fonte tem esse typo
-  { path: '../dados/csv/MARÇO.csv', mes: 'Março' },
-  { path: '../dados/csv/ABRIL.csv', mes: 'Abril' },
+  { file: 'JANEIRO.csv', mes: 'Janeiro' },
+  { file: 'FEVEVEIRO.csv', mes: 'Fevereiro' }, // nome do arquivo-fonte tem esse typo
+  { file: 'MARÇO.csv', mes: 'Março' },
+  { file: 'ABRIL.csv', mes: 'Abril' },
 ];
-const COLABORADORES_PATH = '../dados/csv/COLABORADORES.csv';
-const GESTORES_PATH = '../dados/csv/GESTORES.csv';
+const COLABORADORES_FILE = 'COLABORADORES.csv';
+const GESTORES_FILE = 'GESTORES.csv';
+
+// Resolvido uma única vez por carga (ver resolveDataDir), junto com o texto
+// do COLABORADORES.csv que serviu de sonda — assim não se baixa duas vezes.
+let dataDir = null;
+let colaboradoresText = null;
 
 const WEEKDAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 const DATE_RE = /^(\d{2})\/(\d{2})\/(\d{4})$/;
@@ -28,14 +38,36 @@ async function fetchText(path) {
   return res.text();
 }
 
+/**
+ * Descobre qual diretório de DATA_DIRS existe, sondando o COLABORADORES.csv
+ * de cada um. Guarda o texto da sonda para o loadColaboradores reaproveitar.
+ */
+async function resolveDataDir() {
+  if (dataDir) return dataDir;
+  for (const dir of DATA_DIRS) {
+    try {
+      const res = await fetch(encodeURI(dir + COLABORADORES_FILE));
+      if (!res.ok) continue;
+      colaboradoresText = await res.text();
+      dataDir = dir;
+      return dir;
+    } catch (_) {
+      // diretório ausente/inacessível — tenta o próximo
+    }
+  }
+  throw new Error(
+    `Nenhum diretório de dados encontrado (${DATA_DIRS.join(', ')}). Confira o README para rodar via servidor local.`
+  );
+}
+
 function parseDateBR(d) {
   const m = DATE_RE.exec(d);
   if (!m) return null;
   return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
 }
 
-async function loadMonthlyEvents(path, mes) {
-  const text = await fetchText(path);
+async function loadMonthlyEvents(file, mes) {
+  const text = await fetchText(dataDir + file);
   const rows = parseCSV(text);
   // Só nos interessam linhas cuja primeira coluna é uma data dd/mm/aaaa —
   // isso já descarta banner, cabeçalho, linhas em branco e o rodapé fixo
@@ -56,7 +88,7 @@ async function loadMonthlyEvents(path, mes) {
 }
 
 async function loadColaboradores() {
-  const text = await fetchText(COLABORADORES_PATH);
+  const text = colaboradoresText;
   const rows = parseCSV(text);
   const map = new Map();
   for (let i = 1; i < rows.length; i++) {
@@ -73,7 +105,7 @@ async function loadColaboradores() {
 }
 
 async function loadGestoresSet() {
-  const text = await fetchText(GESTORES_PATH);
+  const text = await fetchText(dataDir + GESTORES_FILE);
   const rows = parseCSV(text);
   const set = new Set();
   for (const r of rows) {
@@ -147,8 +179,9 @@ function buildDataset(monthlyEventArrays, colaboradoresMap, gestoresSet) {
 }
 
 async function loadAll() {
+  await resolveDataDir();
   const [monthlyArrays, colaboradoresMap, gestoresSet] = await Promise.all([
-    Promise.all(MONTHLY_FILES.map((f) => loadMonthlyEvents(f.path, f.mes))),
+    Promise.all(MONTHLY_FILES.map((f) => loadMonthlyEvents(f.file, f.mes))),
     loadColaboradores(),
     loadGestoresSet(),
   ]);

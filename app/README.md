@@ -1,7 +1,8 @@
 # Dashboard Cartão Mestre
 
 App estático client-side (HTML + JS puro, sem build/framework) que lê os
-CSVs de `dados/csv/`, aplica a limpeza descrita no plano e renderiza o
+CSVs de `dados/csv/` (ou, na ausência deles, os fictícios de
+`dados/csv-exemplo/`), aplica a limpeza descrita abaixo e renderiza o
 dashboard. Reaproveita o runtime Tailwind já embutido em
 `design-system/assets/` para manter a mesma linguagem visual do template
 do projeto (tema escuro, cards `rounded-3xl`).
@@ -23,12 +24,17 @@ python -m http.server 8080
 
 Depois abra `http://localhost:PORTA/app/` no navegador.
 
+Sem nenhum CSV real em `dados/csv/`, o app cai automaticamente em
+`dados/csv-exemplo/` (dados fictícios versionados) — é o que roda em quem
+acabou de clonar o repositório.
+
 ## Estrutura
 
 - `index.html` — shell da página e filtros
 - `js/csv.js` — parser CSV (lida com aspas/quebras de linha embutidas)
 - `js/normalize.js` — normalização de SETOR/MOTIVO/RESPONSÁVEL
-- `js/data.js` — carregamento dos 6 CSVs + limpeza (ETL)
+- `js/data.js` — resolução do diretório de dados (`DATA_DIRS`),
+  carregamento dos 6 CSVs + limpeza (ETL)
 - `js/aggregate.js` — KPIs, rankings, heatmap, qualidade de dados
 - `js/export.js` — exportação da lista/agregados filtrados em CSV, planilha
   Excel (SpreadsheetML, várias abas) e relatório PDF (via impressão do
@@ -50,9 +56,9 @@ Depois abra `http://localhost:PORTA/app/` no navegador.
   `naoCadastrado: true` (exibido como "órfã"), nunca é descartada.
 - Aprovador fora de `GESTORES.csv` vira `aprovadorNaoAutorizado: true`
   e aparece no painel de alerta vermelho.
-- A data suspeita (`23/01/2006` em `JANEIRO.csv`) **não é corrigida
-  automaticamente** — só é contabilizada no painel de qualidade, como
-  o plano definiu.
+- Datas com ano anterior a 2020 (a fonte real tem uma) **não são
+  corrigidas automaticamente** — só entram na contagem do painel de
+  qualidade.
 
 ## Adicionar um novo mês
 
@@ -60,13 +66,13 @@ Depois abra `http://localhost:PORTA/app/` no navegador.
    na linha 1, linha 2 em branco, cabeçalho real na linha 3 — ver
    `CLAUDE.md` da raiz do repo).
 2. Abra `app/js/data.js` e acrescente uma linha em `MONTHLY_FILES`, na ordem
-   cronológica, ex.: `{ path: '../dados/csv/MAIO.csv', mes: 'Maio' }`.
+   cronológica, ex.: `{ file: 'MAIO.csv', mes: 'Maio' }`.
 3. Pronto — filtro de período, tendência mensal, KPIs e o texto do
    cabeçalho ("jan/2026 – mai/2026" etc.) se recalculam sozinhos a partir
    dessa lista; nenhum outro arquivo precisa mudar.
 
 Se o nome do arquivo-fonte vier com acento/typo (como aconteceu com
-`FEVEVEIRO.csv`), copie o nome exatamente como está no arquivo — o `path`
+`FEVEVEIRO.csv`), copie o nome exatamente como está no arquivo — o `file`
 tem que bater com o nome real salvo em disco.
 
 ## Pendente

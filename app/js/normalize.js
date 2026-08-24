@@ -1,8 +1,7 @@
 /**
  * Normalização dos campos de texto livre dos logs (SETOR, MOTIVO,
- * RESPONSÁVEL PELA AUTORIZAÇÃO). Ver plano em
- * app/README.md
- * para o racional de cada regra.
+ * RESPONSÁVEL PELA AUTORIZAÇÃO). Ver app/README.md para o racional
+ * de cada regra.
  *
  * Estratégia: normalizar caixa/espaços/traço sem descartar acentos
  * (preserva a grafia original para exibição), e só recorrer a um

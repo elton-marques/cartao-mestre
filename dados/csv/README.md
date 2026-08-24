@@ -2,9 +2,14 @@
 
 Os CSVs desta pasta **não são versionados** (veja `.gitignore` na raiz —
 `dados/csv/*.csv`), porque contêm dados pessoais reais de funcionários
-(nome, matrícula, setor). Ao clonar o repo em outra máquina, copie esses
-arquivos separadamente (pendrive, OneDrive, zip à parte) para dentro desta
-pasta antes de rodar o app.
+(nome, matrícula, setor) — dado pessoal sob a LGPD, que não entra em repo
+público. Ao clonar o repo em outra máquina, copie esses arquivos
+separadamente (pendrive, OneDrive, zip à parte) para dentro desta pasta
+antes de rodar o app.
+
+Sem eles, o app não quebra: `app/js/data.js` cai automaticamente em
+`../dados/csv-exemplo/`, que traz um conjunto **fictício** de mesmo
+formato (ver `dados/csv-exemplo/README.md`).
 
 Formato: português, delimitado por vírgula, UTF-8 com acentos, campos
 multi-linha entre aspas.
@@ -36,8 +41,8 @@ multi-linha entre aspas.
 1. Coloque o CSV do mês novo aqui, seguindo exatamente o mesmo formato
    (banner na linha 1, linha em branco na linha 2, cabeçalho na linha 3).
 2. Abra `app/js/data.js` e acrescente uma linha em `MONTHLY_FILES`, na
-   ordem cronológica — ex.: `{ path: '../dados/csv/MAIO.csv', mes: 'Maio' }`.
-   O nome do arquivo em `path` precisa bater exatamente com o nome salvo em
-   disco (inclusive erros de grafia/acentuação, como em `FEVEVEIRO.csv`).
+   ordem cronológica — ex.: `{ file: 'MAIO.csv', mes: 'Maio' }`. O nome em
+   `file` precisa bater exatamente com o nome salvo em disco (inclusive
+   erros de grafia/acentuação, como em `FEVEVEIRO.csv`).
 
 Mais detalhes de limpeza/normalização em `app/README.md`.

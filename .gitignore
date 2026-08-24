@@ -1,6 +1,9 @@
 # Dados sensíveis (nomes, matrículas, setor de funcionários) — não versionar
 dados/csv/*.csv
 
+# Índice do Serena (machine-specific, not shared)
+.serena/
+
 # Claude Code local settings (machine-specific, not shared)
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
