@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Histórico de login — Cartão Mestre</title>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <link rel="icon" href="../design-system/assets/icons/favicon-cartao-mestre.svg" type="image/svg+xml" />
+    <script src="../design-system/assets/resource_3fa48481346f.js"></script>
+    <link rel="stylesheet" href="../design-system/assets/css2_0b2072b66163.css" />
+    <style>
+      body {
+        font-family:
+          "Plus Jakarta Sans",
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        overflow-x: hidden;
+      }
+      :root {
+        --glass-bg: rgba(255, 255, 255, 0.06);
+        --glass-border: rgba(255, 255, 255, 0.1);
+        --glass-shadow: 0 8px 32px -12px rgba(0, 0, 0, 0.6);
+        color-scheme: dark;
+      }
+      .cm-glass-modal {
+        background: rgba(24, 24, 27, 0.94);
+        border: 1px solid var(--glass-border);
+        box-shadow:
+          var(--glass-shadow),
+          inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+        min-width: 0; /* flex item senão estica pro min-content da tabela nowrap e vaza scroll horizontal no body */
+      }
+      /* table-layout:fixed + colunas em % soma 100 — cada célula quebra
+         linha (sem nowrap) em vez de esticar a tabela, então nunca passa
+         da largura do container. Sem isso, IP/UA compridos empurravam a
+         tabela pra fora e criavam scroll horizontal na página. */
+      table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+      th, td {
+        text-align: left;
+        padding: 6px 8px;
+        font-size: 11.5px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        overflow-wrap: break-word;
+      }
+      th:nth-child(1), td:nth-child(1) { width: 15%; }
+      th:nth-child(2), td:nth-child(2) { width: 13%; }
+      th:nth-child(3), td:nth-child(3) { width: 17%; }
+      th:nth-child(4), td:nth-child(4) { width: 15%; }
+      th:nth-child(5), td:nth-child(5) { width: 22%; }
+      th:nth-child(6), td:nth-child(6) { width: 18%; }
+      th { color: rgba(255, 255, 255, 0.45); font-weight: 600; }
+      tr:hover td { background: rgba(255, 255, 255, 0.03); }
+    </style>
+  </head>
+  <body class="min-h-screen bg-neutral-950 text-white antialiased">
+    <div class="min-h-screen flex flex-col items-center justify-start relative z-10 px-4 py-10 gap-5">
+      <div class="cm-glass-modal rounded-3xl p-6 w-full max-w-4xl flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-lg font-bold tracking-tight text-white">Histórico de login</h1>
+            <p class="text-xs text-white/40 mt-0.5">Quando e de qual IP cada usuário entrou</p>
+          </div>
+          <a href="/cartaomestre/" class="text-xs text-white/35 hover:text-white/60 transition-colors duration-150 no-underline">
+            Voltar ao dashboard
+          </a>
+        </div>
+
+        <div id="status" class="text-xs text-white/40">Carregando…</div>
+        <table id="table" class="hidden">
+          <thead>
+            <tr>
+              <th>Data/hora (Brasília)</th>
+              <th>Usuário</th>
+              <th>IP</th>
+              <th>Local</th>
+              <th>Dispositivo/SO</th>
+              <th>Navegador</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const table = document.getElementById("table");
+      const tbody = document.getElementById("table-body");
+
+      // CSV grava em UTC (login_log.csv, ver server.py) — aqui converte pro
+      // horário de Brasília (America/Sao_Paulo) só na exibição.
+      function formatTimestamp(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return iso;
+        const parts = new Intl.DateTimeFormat("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).formatToParts(d);
+        const get = (type) => parts.find((p) => p.type === type)?.value || "";
+        return `${get("day")}/${get("month")} ${get("hour")}:${get("minute")}`;
+      }
+
+      async function loadHistory() {
+        try {
+          const res = await fetch("/auth/history", { credentials: "include" });
+          if (res.status === 401) {
+            // Mesmo padrão do @login_redirect do nginx pras rotas
+            // protegidas (/cartaomestre/, /dados/): manda de volta pra cá
+            // depois do login via ?next=.
+            const next = encodeURIComponent(location.pathname + location.search);
+            location.href = `/login/?next=${next}`;
+            return;
+          }
+          if (res.status === 403) {
+            // Logado, mas não é admin — não adianta mandar pro /login/ de
+            // novo (ia voltar pro mesmo 403), só avisa e manda pro dashboard.
+            statusEl.textContent = "Seu usuário não tem permissão para ver o histórico de login.";
+            return;
+          }
+          const data = await res.json();
+          const logins = data.logins || [];
+          if (logins.length === 0) {
+            statusEl.textContent = "Nenhum login registrado ainda.";
+            return;
+          }
+          for (const row of logins) {
+            const tr = document.createElement("tr");
+            const local = [row.city, row.country].filter((v) => v && v !== "?").join(" / ") || "—";
+            const cols = [
+              formatTimestamp(row.timestamp_utc),
+              row.username || "",
+              row.ip || "",
+              local,
+              row.device_os || "—",
+              row.browser || "—",
+            ];
+            for (const value of cols) {
+              const td = document.createElement("td");
+              td.textContent = value;
+              tr.appendChild(td);
+            }
+            tbody.appendChild(tr);
+          }
+          statusEl.classList.add("hidden");
+          table.classList.remove("hidden");
+        } catch (err) {
+          console.error("Falha ao carregar histórico:", err);
+          statusEl.textContent = "Não foi possível conectar ao serviço de autenticação.";
+        }
+      }
+
+      loadHistory();
+    </script>
+  </body>
+</html>

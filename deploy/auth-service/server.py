@@ -10,14 +10,34 @@ Endpoints:
   POST /logout  -> limpa o cookie, 200
   GET  /verify  -> 200 se o cookie de sessão é válido, 401 caso contrário
                    (chamado pelo nginx via auth_request — sub-requisição
-                   interna, não é o navegador batendo aqui direto)
+                   interna, não é o navegador batendo aqui direto). Header
+                   X-User com o usuário e X-User-Role com o papel (admin/
+                   viewer) — nginx ignora esses headers, é o app JS
+                   (fetchUsername em app/js/main.js) que os lê.
+  GET  /history -> 200 + JSON com os últimos logins. Exige cookie de sessão
+                   válido E papel "admin" (401 sem sessão, 403 se for
+                   "viewer") — histórico expõe IP/dispositivo de todo mundo,
+                   não é algo que qualquer usuário logado deva ver.
 
-Usuários ficam em /etc/cartao-mestre/users.txt, uma linha por usuário:
-  usuario:salt_hex:sha256_hex(salt + senha)
-Gerencie com manage_users.py (add/del/list) — nunca editar esse arquivo à mão.
+Usuários e histórico de login ficam em /etc/cartao-mestre/cartao-mestre.db
+(SQLite — ver db.py pro schema e pra lógica de hash de senha). "papel" é
+"admin" ou "viewer" — default "viewer" (mais restritivo é o seguro).
+Gerencie usuários com manage_users.py (add/del/list/role) — nunca abrir o
+banco na mão.
+
+Cada login bem-sucedido é gravado na tabela login_history
+(timestamp ISO UTC, usuário, IP, país, cidade, SO/dispositivo, navegador).
+O IP vem do header CF-Connecting-IP (Cloudflare Tunnel injeta esse header
+com o IP real do visitante) com fallback pra X-Forwarded-For e, por fim,
+pro socket da conexão. País/cidade vêm dos headers CF-IPCountry/CF-IPCity
+que o Cloudflare injeta — CF-IPCountry vem de graça em qualquer zona
+proxiada; CF-IPCity só aparece se "Add visitor location headers" estiver
+ligado no painel Cloudflare (Network settings, disponível no free tier).
+SO/dispositivo/navegador vêm de um parse heurístico do User-Agent — não é
+100% preciso (nenhum parser de UA é), mas cobre os casos comuns.
 
 Sem dependências externas de propósito (só stdlib) pra não precisar de
-venv/pip nesse serviço pequeno.
+venv/pip nesse serviço pequeno — sqlite3 (db.py) também é stdlib.
 """
 import hashlib
 import hmac
@@ -27,11 +47,13 @@ import os
 import secrets
 import time
 
-USERS_FILE = "/etc/cartao-mestre/users.txt"
+import db
+
 SECRET_FILE = "/etc/cartao-mestre/secret.key"
 SESSION_TTL = 12 * 3600  # 12h
 COOKIE_NAME = "cm_session"
 LISTEN = ("127.0.0.1", 8082)
+HISTORY_MAX_ROWS = 500  # retorna só os últimos N logins na resposta de /history
 
 
 def _load_secret():
@@ -45,29 +67,6 @@ def _load_secret():
 
 
 SECRET = _load_secret()
-
-
-def _load_users():
-    users = {}
-    if os.path.exists(USERS_FILE):
-        with open(USERS_FILE) as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                parts = line.split(":")
-                if len(parts) == 3:
-                    users[parts[0]] = (parts[1], parts[2])
-    return users
-
-
-def check_password(username, password):
-    users = _load_users()
-    if username not in users:
-        return False
-    salt, expected = users[username]
-    got = hashlib.sha256((salt + password).encode()).hexdigest()
-    return hmac.compare_digest(got, expected)
 
 
 def make_token(username):
@@ -100,6 +99,70 @@ def get_cookie(headers, name):
     return None
 
 
+def get_client_ip(headers, client_address):
+    cf_ip = headers.get("CF-Connecting-IP")
+    if cf_ip:
+        return cf_ip.strip()
+    fwd = headers.get("X-Forwarded-For")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return client_address[0]
+
+
+def get_location(headers):
+    country = (headers.get("CF-IPCountry") or "").strip()
+    city = (headers.get("CF-IPCity") or "").strip()
+    return country or "?", city or "?"
+
+
+# Parse heurístico de User-Agent — não é biblioteca, só regex simples.
+# Cobre os casos comuns (Windows/macOS/Android/iOS/Linux, os navegadores
+# grandes); UA raro cai em "Desconhecido". Ordem dos elif importa: UA de
+# navegador costuma citar mais de uma engine (ex. Edge inclui "Chrome" e
+# "Safari" na string), então o mais específico precisa vir primeiro.
+def parse_user_agent(ua):
+    if not ua:
+        return "Desconhecido", "Desconhecido"
+    u = ua.lower()
+
+    # iPhone/iPad UA também contém "like Mac OS X" — checar iOS antes de
+    # macOS, senão todo celular/tablet Apple cai errado em "macOS".
+    if "windows" in u:
+        os_name = "Windows"
+    elif "iphone" in u or "ipad" in u or "ios " in u:
+        os_name = "iOS"
+    elif "mac os x" in u or "macintosh" in u:
+        os_name = "macOS"
+    elif "android" in u:
+        os_name = "Android"
+    elif "linux" in u:
+        os_name = "Linux"
+    else:
+        os_name = "Desconhecido"
+
+    if "ipad" in u or ("android" in u and "mobile" not in u):
+        device = "Tablet"
+    elif "mobi" in u or "iphone" in u:
+        device = "Mobile"
+    else:
+        device = "Desktop"
+
+    if "edg/" in u:
+        browser = "Edge"
+    elif "opr/" in u or "opera" in u:
+        browser = "Opera"
+    elif "firefox" in u:
+        browser = "Firefox"
+    elif "chrome" in u:
+        browser = "Chrome"
+    elif "safari" in u:
+        browser = "Safari"
+    else:
+        browser = "Desconhecido"
+
+    return f"{os_name} ({device})", browser
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     server_version = "cartao-mestre-auth/1.0"
 
@@ -123,6 +186,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if username:
                 self.send_response(200)
                 self.send_header("X-User", username)
+                self.send_header("X-User-Role", db.get_user_role(username) or "viewer")
                 self.send_header("Content-Length", "0")
                 self.end_headers()
             else:
@@ -130,6 +194,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_header("Content-Length", "0")
                 self.end_headers()
             return
+
+        if self.path.startswith("/history"):
+            token = get_cookie(self.headers, COOKIE_NAME)
+            username = verify_token(token) if token else None
+            if not username:
+                self._send_json(401, {"ok": False, "error": "Não autenticado."})
+                return
+            if db.get_user_role(username) != "admin":
+                self._send_json(403, {"ok": False, "error": "Sem permissão pra ver o histórico de login."})
+                return
+            self._send_json(200, {"ok": True, "logins": db.read_login_history(HISTORY_MAX_ROWS)})
+            return
+
         self.send_response(404)
         self.end_headers()
 
@@ -144,12 +221,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path.startswith("/login"):
             username = (data.get("username") or "").strip()
             password = data.get("password") or ""
-            if username and check_password(username, password):
+            if username and db.check_password(username, password):
                 token = make_token(username)
                 cookie = (
                     f"{COOKIE_NAME}={token}; Path=/; Max-Age={SESSION_TTL}; "
                     f"HttpOnly; Secure; SameSite=Lax"
                 )
+                ip = get_client_ip(self.headers, self.client_address)
+                country, city = get_location(self.headers)
+                device_os, browser = parse_user_agent(self.headers.get("User-Agent", ""))
+                db.log_login(username, ip, country, city, device_os, browser)
                 self._send_json(200, {"ok": True}, [("Set-Cookie", cookie)])
             else:
                 self._send_json(401, {"ok": False, "error": "Usuário ou senha inválidos."})

@@ -1546,6 +1546,7 @@ function renderExportMenu(container, { isOpen, onToggle, onExportCSV, onExportEx
 const ICON_USER = '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>';
 const ICON_SWITCH_ACCOUNT = '<path d="m17 2 4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path>';
 const ICON_LOGOUT = '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>';
+const ICON_HISTORY = '<path d="M3 3v5h5"></path><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"></path><path d="M12 7v5l4 2"></path>';
 
 // Mesmo conjunto (traço Lucide), reusado no menu de exportação e na busca —
 // tudo ícone SVG inline no lugar de emoji.
@@ -1562,7 +1563,7 @@ const ICON_PRINTER = '<path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-
  * o botão cai pra um rótulo genérico "Conta" — as ações continuam
  * funcionando (POST /auth/logout + redirect), só a etiqueta de "logado
  * como" não aparece. */
-function renderAccountMenu(container, { isOpen, username, onToggle, onSwitchAccount, onLogout }) {
+function renderAccountMenu(container, { isOpen, username, isAdmin, onToggle, onOpenHistory, onSwitchAccount, onLogout }) {
   container.innerHTML = '';
 
   const btn = el('button', `cm-select flex items-center gap-2 rounded-full text-sm px-3 py-2 text-white/70 transition-colors duration-150 hover:border-white/25 hover:text-white ${isOpen ? 'text-white' : ''}`);
@@ -1593,8 +1594,12 @@ function renderAccountMenu(container, { isOpen, username, onToggle, onSwitchAcco
     return b;
   };
 
-  // onSwitchAccount vem null na instância demo (main.js) — item some do
-  // menu em vez de levar pra tela de login real do sistema.
+  // isAdmin/onOpenHistory e onSwitchAccount vêm null|false na instância demo
+  // (main.js) — cada item some do menu em vez de expor histórico real ou
+  // levar pra tela de login real do sistema.
+  if (isAdmin) {
+    panel.appendChild(menuItem(ICON_HISTORY, 'Histórico de login', onOpenHistory));
+  }
   if (onSwitchAccount) {
     panel.appendChild(menuItem(ICON_SWITCH_ACCOUNT, 'Trocar de conta', onSwitchAccount));
   }

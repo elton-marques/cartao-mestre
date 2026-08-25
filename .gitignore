@@ -15,6 +15,10 @@ CLAUDE.md
 # Credenciais da VPS (chave SSH + host) — nunca versionar.
 deploy/.vps.env
 
+# Python (deploy/auth-service/)
+__pycache__/
+*.pyc
+
 # OS junk
 .DS_Store
 Thumbs.db

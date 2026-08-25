@@ -35,6 +35,7 @@ const state = {
   showOrfaosCard: localStorage.getItem('cm_orfaos_card_visible') === '1',
   openDropdown: null, // 'mes' | 'setor' | 'motivo' | 'aprovador' | 'more' | 'export' | 'account' | null
   username: null, // vem de GET /auth/verify (X-User) no boot; null em dev local sem o serviço de auth
+  userRole: null, // vem de GET /auth/verify (X-User-Role) — 'admin' | 'viewer' | null; controla o item "Histórico de login" no menu de conta
   filterOptions: { setor: [], motivo: [], aprovador: [] }, // opções fixas, calculadas 1x no boot a partir do dataset completo
   // Listas curtas o bastante pra não precisar de scroll (motivos, gestores
   // fora da lista) mostram só os primeiros itens por padrão — "expanded"
@@ -135,11 +136,11 @@ function onToggleOrfaosCard(checked) {
 async function fetchUsername() {
   try {
     const res = await fetch('/auth/verify', { credentials: 'include' });
-    if (res.ok) return res.headers.get('X-User');
+    if (res.ok) return { username: res.headers.get('X-User'), role: res.headers.get('X-User-Role') };
   } catch (err) {
     console.error('Falha ao consultar sessão:', err);
   }
-  return null;
+  return { username: null, role: null };
 }
 
 /** POST /auth/logout limpa o cookie de sessão no servidor; o redirect (pro
@@ -165,6 +166,12 @@ function onLogout() {
  * usuário loga e cai direto no dashboard, sem passar pelo hub no meio. */
 function onSwitchAccount() {
   doLogout('/login/?next=' + encodeURIComponent(location.pathname));
+}
+
+/** "Histórico de login" (só aparece pro papel "admin", ver renderAccountMenu)
+ * — mesma sessão/cookie do dashboard, então abre direto sem novo login. */
+function onOpenHistory() {
+  location.href = '/login/historico.html';
 }
 
 // -------------------------------------------------------- Dropdowns de filtro
@@ -223,10 +230,13 @@ function renderFilterBar() {
   renderAccountMenu(e.accountMenu, {
     isOpen: state.openDropdown === 'account',
     username: state.username,
+    // Desligado na demo: "Histórico de login" exigiria sessão admin real, e
+    // "Trocar de conta" levaria pra tela de login real do sistema — nenhum
+    // dos dois faz sentido numa instância com dados fictícios (render.js só
+    // desenha cada item quando o handler correspondente existe).
+    isAdmin: IS_DEMO ? false : state.userRole === 'admin',
     onToggle: () => onToggleDropdown('account'),
-    // Desligado na demo: levaria pra tela de login real do sistema, fora
-    // do escopo de uma instância com dados fictícios (render.js só
-    // desenha o item "Trocar de conta" quando esse handler existe).
+    onOpenHistory: IS_DEMO ? null : onOpenHistory,
     onSwitchAccount: IS_DEMO ? null : onSwitchAccount,
     onLogout,
   });
@@ -616,10 +626,18 @@ async function boot() {
   // falhar (dev local sem o serviço de auth na frente), fetchUsername
   // engole o erro e devolve null — o dashboard sobe normalmente, só o
   // rótulo do menu cai pro genérico "Conta".
-  // Na instância demo, mascara o usuário real (ex: prevencao.cau) por um
-  // rótulo genérico (evita vazar o nome de conta real numa página que
-  // anuncia "dados fictícios, não reflete o sistema real").
-  state.username = IS_DEMO ? 'Demo' : await fetchUsername();
+  if (IS_DEMO) {
+    // Na instância demo, mascara o usuário real (ex: prevencao.cau) por um
+    // rótulo genérico (evita vazar o nome de conta real numa página que
+    // anuncia "dados fictícios, não reflete o sistema real") e não faz a
+    // chamada real de sessão — não há papel admin/viewer que faça sentido
+    // aqui de qualquer forma (ver renderFilterBar, isAdmin sempre false).
+    state.username = 'Demo';
+  } else {
+    const session = await fetchUsername();
+    state.username = session.username;
+    state.userRole = session.role;
+  }
 
   wireFilters();
   renderAll();

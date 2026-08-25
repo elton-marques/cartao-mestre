@@ -27,7 +27,7 @@ externamente por conta própria — só alcançáveis via túnel):
 | Serviço | Porta | Serve | Auth |
 |---|---|---|---|
 | `deploy/nginx/cartao-mestre.conf` (nginx) | `127.0.0.1:8080` | `/cartaomestre/` (app), `/design-system/` (assets do template), `/dados/` (CSVs), `/login/` (tela de login), `/auth/` (proxy pro serviço de sessão) | `/cartaomestre/` e `/dados/` exigem sessão válida (cookie); `/design-system/` e `/login/` públicos |
-| `deploy/auth-service/server.py` (systemd `cartao-mestre-auth`) | `127.0.0.1:8082` | `/login`, `/logout`, `/verify` — API de sessão por cookie | — (é o próprio serviço de auth) |
+| `deploy/auth-service/server.py` (systemd `cartao-mestre-auth`) | `127.0.0.1:8082` | `/login`, `/logout`, `/verify`, `/history` — API de sessão por cookie | — (é o próprio serviço de auth); `/history` exige cookie válido + papel `admin` (401 sem sessão, 403 se `viewer`) |
 
 O hub (`elton-marques/eltonmarques-site`, porta `127.0.0.1:8081`) é um
 serviço irmão na mesma VPS — ver o `deploy/README.md` daquele repo.
@@ -73,18 +73,34 @@ Como funciona:
 3. `deploy/login/index.html` faz `fetch()` pra `POST /auth/login` com
    usuário/senha em JSON; sucesso seta o cookie e redireciona pro `next`.
 
-Usuários ficam em `/etc/cartao-mestre/users.txt` na VPS (fora do git —
-`usuario:salt_hex:sha256_hex`, nunca senha em texto puro). Gerencie com:
+Usuários ficam em `/etc/cartao-mestre/cartao-mestre.db` na VPS (SQLite,
+fora do git — ver `deploy/auth-service/db.py` pro schema). Senha nunca em
+texto puro: hash PBKDF2-HMAC-SHA256 com salt por usuário (100k iterações).
+Gerencie com:
 
 ```bash
-ssh -i "$KEY" "$VPS" "python3 /opt/cartao-mestre-auth/manage_users.py add '<usuario>' '<senha>'"
+ssh -i "$KEY" "$VPS" "python3 /opt/cartao-mestre-auth/manage_users.py add '<usuario>' '<senha>' [papel]"
+ssh -i "$KEY" "$VPS" "python3 /opt/cartao-mestre-auth/manage_users.py role '<usuario>' <admin|viewer>"
 ssh -i "$KEY" "$VPS" "python3 /opt/cartao-mestre-auth/manage_users.py del '<usuario>'"
 ssh -i "$KEY" "$VPS" "python3 /opt/cartao-mestre-auth/manage_users.py list"
 ```
 
-Todo usuário logado tem o mesmo nível de acesso (só visualização/filtros —
-o app não tem modo de edição) — não existe hoje uma distinção de papéis
-por usuário.
+### Papéis (admin / viewer)
+
+Todo usuário logado usa o dashboard (`/cartaomestre/`) do mesmo jeito — só
+visualização/filtros, o app não tem modo de edição. A única distinção de
+papel hoje é o **histórico de login** (`/login/historico.html`, expõe IP e
+dispositivo de todo mundo que já logou):
+
+- **admin** — vê o item "Histórico de login" no menu de conta do dashboard
+  e acessa `/auth/history`.
+- **viewer** — não vê o item no menu; se tentar acessar
+  `/login/historico.html` direto, o serviço de auth responde `403` (não
+  `401` — a sessão é válida, só não tem o papel certo) e a página mostra
+  "sem permissão" em vez de ficar redirecionando pro login.
+
+Linha de usuário sem o campo `papel` (formato anterior a essa feature) é
+tratada como `viewer` — o mais restritivo é o default seguro.
 
 O dashboard (`app/js/main.js`) usa os três endpoints do serviço de sessão:
 `GET /auth/verify` no boot pra saber quem está logado (mostra o usuário no
@@ -98,6 +114,31 @@ monta o arquivo/relatório a partir do que já está carregado no navegador
 A chave de assinatura dos cookies fica em `/etc/cartao-mestre/secret.key`
 (gerada automaticamente na primeira execução do serviço; fora do git).
 Trocar essa chave invalida todas as sessões ativas.
+
+### Histórico de login
+
+Todo `POST /auth/login` bem-sucedido é gravado na tabela `login_history` de
+`/etc/cartao-mestre/cartao-mestre.db` (fora do git) — uma linha por login
+com timestamp UTC, usuário, IP, país, cidade, SO/dispositivo e navegador:
+
+- **IP**: header `CF-Connecting-IP` (injetado pelo Cloudflare Tunnel com o
+  IP real do visitante), fallback `X-Forwarded-For`, fallback socket da
+  conexão.
+- **País/cidade**: headers `CF-IPCountry`/`CF-IPCity` do Cloudflare.
+  `CF-IPCountry` vem de graça em qualquer zona proxiada; `CF-IPCity` só
+  aparece se **"Add visitor location headers"** estiver ligado no painel
+  Cloudflare (dashboard → Network, disponível no free tier) — sem isso,
+  a coluna cidade fica em branco.
+- **SO/dispositivo/navegador**: parse heurístico do header `User-Agent`
+  feito em `parse_user_agent()` (regex simples, sem lib) — cobre os casos
+  comuns (Windows/macOS/iOS/Android/Linux, Chrome/Firefox/Safari/Edge/Opera),
+  não é 100% preciso.
+
+`GET /auth/history` devolve os últimos 500 logins em JSON (exige cookie de
+sessão válido **e** papel `admin` — ver "Papéis" acima).
+`deploy/login/historico.html` é uma página simples (mesmo visual do login)
+que consome esse endpoint e mostra a tabela — acessível em
+`eltonmarques.com/login/historico.html`.
 
 ## Por que caminhos relativos exigem essa estrutura
 
@@ -119,15 +160,18 @@ raciocínio: `../design-system/` (um nível abaixo, como o app).
 └── dados/csv/      ← CSVs reais (não versionados — ver dados/csv/README.md)
 
 /var/www/login/
-└── index.html      ← deploy/login/index.html deste repo
+├── index.html       ← deploy/login/index.html deste repo
+└── historico.html   ← deploy/login/historico.html deste repo
 
 /opt/cartao-mestre-auth/
-├── server.py         ← deploy/auth-service/server.py deste repo
-└── manage_users.py   ← deploy/auth-service/manage_users.py deste repo
+├── server.py              ← deploy/auth-service/server.py deste repo
+├── db.py                  ← deploy/auth-service/db.py deste repo (schema SQLite)
+├── manage_users.py        ← deploy/auth-service/manage_users.py deste repo
+└── migrate_to_sqlite.py   ← deploy/auth-service/migrate_to_sqlite.py deste repo (one-shot)
 
-/etc/cartao-mestre/     (fora do git)
-├── users.txt         ← usuários do login
-└── secret.key         ← chave de assinatura dos cookies de sessão
+/etc/cartao-mestre/         (fora do git)
+├── cartao-mestre.db       ← SQLite: usuários + papéis + histórico de login
+└── secret.key             ← chave de assinatura dos cookies de sessão
 
 /etc/systemd/system/cartao-mestre-auth.service  ← deploy/systemd/cartao-mestre-auth.service deste repo
 ```
@@ -147,20 +191,40 @@ VPS=ubuntu@<ip-da-vps>
 scp -i "$KEY" -r app design-system dados "$VPS":/var/www/cartao-mestre/
 
 # login
-scp -i "$KEY" deploy/login/index.html "$VPS":/var/www/login/index.html
+scp -i "$KEY" deploy/login/index.html deploy/login/historico.html "$VPS":/var/www/login/
 
 # nginx
 scp -i "$KEY" deploy/nginx/cartao-mestre.conf "$VPS":/tmp/ && \
   ssh -i "$KEY" "$VPS" 'sudo mv /tmp/cartao-mestre.conf /etc/nginx/sites-available/ && sudo nginx -t && sudo systemctl restart nginx'
 
-# serviço de auth (só se mudou server.py/manage_users.py)
-scp -i "$KEY" deploy/auth-service/server.py "$VPS":/opt/cartao-mestre-auth/server.py
-scp -i "$KEY" deploy/auth-service/manage_users.py "$VPS":/opt/cartao-mestre-auth/manage_users.py
+# serviço de auth (só se mudou server.py/db.py/manage_users.py)
+scp -i "$KEY" deploy/auth-service/server.py deploy/auth-service/db.py deploy/auth-service/manage_users.py \
+  "$VPS":/opt/cartao-mestre-auth/
 ssh -i "$KEY" "$VPS" 'sudo systemctl restart cartao-mestre-auth'
 ```
 
 `dados/csv/` na VPS precisa ser mantido em dia manualmente (novo mês →
 `scp` do CSV novo, ver `dados/csv/README.md` no que muda em `data.js`).
+
+### Migração única: users.txt/login_log.csv → SQLite
+
+Só precisa rodar essa migração **uma vez**, na primeira vez que o serviço
+de auth é atualizado pra versão com `db.py` (deploys seguintes não
+precisam mais disso — o banco já existe):
+
+```bash
+scp -i "$KEY" deploy/auth-service/db.py deploy/auth-service/migrate_to_sqlite.py \
+  "$VPS":/opt/cartao-mestre-auth/
+ssh -i "$KEY" "$VPS" 'sudo systemctl stop cartao-mestre-auth && \
+  cd /opt/cartao-mestre-auth && sudo python3 migrate_to_sqlite.py'
+# confere: ssh ... 'python3 /opt/cartao-mestre-auth/manage_users.py list'
+# só depois de conferir, copia server.py/manage_users.py novos e reinicia
+# o serviço (passo "serviço de auth" acima).
+```
+
+`migrate_to_sqlite.py` não apaga `users.txt`/`login_log.csv` — só avisa no
+final pra mover pra `.bak` depois de conferir que os usuários vieram
+certo.
 
 ## Cache do Cloudflare — cuidado em deploys de HTML/JS/CSS
 
@@ -186,4 +250,4 @@ nome de arquivo (fontes/Tailwind runtime), cache longo ali é desejado.
 - Token de API da Cloudflare (usado só pontualmente pra configurar as
   rotas do túnel; pode ser revogado depois de configurado — a rota fica
   salva no lado da Cloudflare, não depende do token continuar válido).
-- `/etc/cartao-mestre/users.txt` e `/etc/cartao-mestre/secret.key`.
+- `/etc/cartao-mestre/cartao-mestre.db` e `/etc/cartao-mestre/secret.key`.
