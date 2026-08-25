@@ -1593,7 +1593,11 @@ function renderAccountMenu(container, { isOpen, username, onToggle, onSwitchAcco
     return b;
   };
 
-  panel.appendChild(menuItem(ICON_SWITCH_ACCOUNT, 'Trocar de conta', onSwitchAccount));
+  // onSwitchAccount vem null na instância demo (main.js) — item some do
+  // menu em vez de levar pra tela de login real do sistema.
+  if (onSwitchAccount) {
+    panel.appendChild(menuItem(ICON_SWITCH_ACCOUNT, 'Trocar de conta', onSwitchAccount));
+  }
   panel.appendChild(menuItem(ICON_LOGOUT, 'Sair', onLogout));
 
   container.appendChild(panel);

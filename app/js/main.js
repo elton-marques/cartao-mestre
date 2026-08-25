@@ -4,6 +4,14 @@
  * qualquer gráfico/card).
  */
 
+// Mesmo arquivo serve produção (/cartaomestre/) e a instância de
+// demonstração (/cartaomestre-demo/), diferenciadas só por checagem de
+// path — mesmo critério do banner de aviso em index.html. Usado pra
+// mascarar o usuário real e desligar "Trocar de conta" (que levaria pra
+// tela de login real do sistema, fora do escopo de uma demo com dados
+// fictícios).
+const IS_DEMO = location.pathname.includes('/cartaomestre-demo/');
+
 const state = {
   // Matrícula órfã NÃO é um filtro de dado (ver applyFilters em aggregate.js):
   // é uma liberação real, só sem cadastro em COLABORADORES.csv (que pode
@@ -216,7 +224,10 @@ function renderFilterBar() {
     isOpen: state.openDropdown === 'account',
     username: state.username,
     onToggle: () => onToggleDropdown('account'),
-    onSwitchAccount,
+    // Desligado na demo: levaria pra tela de login real do sistema, fora
+    // do escopo de uma instância com dados fictícios (render.js só
+    // desenha o item "Trocar de conta" quando esse handler existe).
+    onSwitchAccount: IS_DEMO ? null : onSwitchAccount,
     onLogout,
   });
 }
@@ -606,12 +617,9 @@ async function boot() {
   // engole o erro e devolve null — o dashboard sobe normalmente, só o
   // rótulo do menu cai pro genérico "Conta".
   // Na instância demo, mascara o usuário real (ex: prevencao.cau) por um
-  // rótulo genérico — mesmo critério de path do banner de aviso acima
-  // (evita vazar o nome de conta real numa página que anuncia "dados
-  // fictícios, não reflete o sistema real").
-  state.username = location.pathname.includes('/cartaomestre-demo/')
-    ? 'Demo'
-    : await fetchUsername();
+  // rótulo genérico (evita vazar o nome de conta real numa página que
+  // anuncia "dados fictícios, não reflete o sistema real").
+  state.username = IS_DEMO ? 'Demo' : await fetchUsername();
 
   wireFilters();
   renderAll();
