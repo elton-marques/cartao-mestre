@@ -257,9 +257,21 @@
       ⚠️ Ambiente de demonstração — dados fictícios, não reflete o sistema real
     </div>
     <script>
+      // #active-filters (barra de filtros ativos) também é sticky top-0 —
+      // sem isso os dois disputam o mesmo y=0 ao rolar e o banner (z-50)
+      // cobre a barra de filtros (z-30) por baixo dele. Mede a altura real
+      // do banner (varia com quebra de linha em telas estreitas) e empurra
+      // o top da barra de filtros por essa altura via custom property.
+      function syncDemoBannerOffset() {
+        var banner = document.getElementById('demo-banner');
+        var h = banner && !banner.classList.contains('hidden') ? banner.offsetHeight : 0;
+        document.documentElement.style.setProperty('--demo-banner-h', h + 'px');
+      }
       if (location.pathname.includes('/cartaomestre-demo/')) {
         document.getElementById('demo-banner').classList.remove('hidden');
       }
+      syncDemoBannerOffset();
+      window.addEventListener('resize', syncDemoBannerOffset);
     </script>
     <div class="cm-aurora" aria-hidden="true">
       <div class="cm-aurora__blob cm-aurora__blob--1"></div>
@@ -351,6 +363,7 @@
       <div
         id="active-filters"
         class="hidden sticky top-0 z-30 flex flex-wrap gap-2 items-center px-4 sm:px-6 lg:px-8 py-3 bg-neutral-950/95 border-b border-white/10"
+        style="top: var(--demo-banner-h, 0px)"
       ></div>
 
       <main class="flex-1">

@@ -605,7 +605,13 @@ async function boot() {
   // falhar (dev local sem o serviço de auth na frente), fetchUsername
   // engole o erro e devolve null — o dashboard sobe normalmente, só o
   // rótulo do menu cai pro genérico "Conta".
-  state.username = await fetchUsername();
+  // Na instância demo, mascara o usuário real (ex: prevencao.cau) por um
+  // rótulo genérico — mesmo critério de path do banner de aviso acima
+  // (evita vazar o nome de conta real numa página que anuncia "dados
+  // fictícios, não reflete o sistema real").
+  state.username = location.pathname.includes('/cartaomestre-demo/')
+    ? 'Demo'
+    : await fetchUsername();
 
   wireFilters();
   renderAll();
