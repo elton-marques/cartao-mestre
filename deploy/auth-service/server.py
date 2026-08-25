@@ -7,6 +7,11 @@ deixa estilizar a caixinha nativa do Basic Auth.
 
 Endpoints:
   POST /login   {"username": "...", "password": "..."}  -> Set-Cookie + 200 / 401
+                   429 se o IP estourou o limite de tentativas (ver
+                   MAX_LOGIN_ATTEMPTS/LOGIN_ATTEMPT_WINDOW) — sem isso,
+                   qualquer um podia tentar senha de qualquer usuário
+                   (viewer incluso, que já enxerga COLABORADORES.csv no
+                   dashboard) sem limite algum.
   POST /logout  -> limpa o cookie, 200
   GET  /verify  -> 200 se o cookie de sessão é válido, 401 caso contrário
                    (chamado pelo nginx via auth_request — sub-requisição
@@ -45,6 +50,7 @@ import http.server
 import json
 import os
 import secrets
+import threading
 import time
 
 import db
@@ -54,6 +60,41 @@ SESSION_TTL = 12 * 3600  # 12h
 COOKIE_NAME = "cm_session"
 LISTEN = ("127.0.0.1", 8082)
 HISTORY_MAX_ROWS = 500  # retorna só os últimos N logins na resposta de /history
+
+# Rate-limit de /login por IP — sem isso um IP podia tentar senha sem
+# limite (brute-force/credential-stuffing contra qualquer usuário,
+# inclusive "viewer", que já tem acesso legítimo ao CSV de colaboradores).
+# Chave é o IP (get_client_ip), não o usuário: também trava enumeração de
+# usuário por tentativa-e-erro. Em memória de propósito — serviço roda
+# como processo único (ThreadingHTTPServer), reiniciar zera os contadores,
+# o que é aceitável pra esse limite.
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_ATTEMPT_WINDOW = 15 * 60  # tentativas falhas mais velhas que isso não contam
+LOGIN_LOCKOUT_SECONDS = 15 * 60  # Retry-After sugerido quando o limite estoura
+
+_login_attempts_lock = threading.Lock()
+_failed_logins = {}  # ip -> [timestamp de cada tentativa falha, mais recente por último]
+
+
+def _is_ip_locked_out(ip):
+    now = time.time()
+    with _login_attempts_lock:
+        attempts = [t for t in _failed_logins.get(ip, []) if now - t < LOGIN_ATTEMPT_WINDOW]
+        if attempts:
+            _failed_logins[ip] = attempts
+        else:
+            _failed_logins.pop(ip, None)
+        return len(attempts) >= MAX_LOGIN_ATTEMPTS
+
+
+def _record_failed_login(ip):
+    with _login_attempts_lock:
+        _failed_logins.setdefault(ip, []).append(time.time())
+
+
+def _clear_failed_logins(ip):
+    with _login_attempts_lock:
+        _failed_logins.pop(ip, None)
 
 
 def _load_secret():
@@ -219,20 +260,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
             data = {}
 
         if self.path.startswith("/login"):
+            ip = get_client_ip(self.headers, self.client_address)
+            if _is_ip_locked_out(ip):
+                self._send_json(
+                    429,
+                    {"ok": False, "error": "Muitas tentativas. Tente novamente em alguns minutos."},
+                    [("Retry-After", str(LOGIN_LOCKOUT_SECONDS))],
+                )
+                return
+
             username = (data.get("username") or "").strip()
             password = data.get("password") or ""
             if username and db.check_password(username, password):
+                _clear_failed_logins(ip)
                 token = make_token(username)
                 cookie = (
                     f"{COOKIE_NAME}={token}; Path=/; Max-Age={SESSION_TTL}; "
                     f"HttpOnly; Secure; SameSite=Lax"
                 )
-                ip = get_client_ip(self.headers, self.client_address)
                 country, city = get_location(self.headers)
                 device_os, browser = parse_user_agent(self.headers.get("User-Agent", ""))
                 db.log_login(username, ip, country, city, device_os, browser)
                 self._send_json(200, {"ok": True}, [("Set-Cookie", cookie)])
             else:
+                _record_failed_login(ip)
                 self._send_json(401, {"ok": False, "error": "Usuário ou senha inválidos."})
             return
 
