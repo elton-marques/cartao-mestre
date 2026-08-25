@@ -246,6 +246,21 @@
     </style>
   </head>
   <body class="min-h-screen bg-neutral-950 text-white antialiased">
+    <!-- Este mesmo arquivo serve produção (/cartaomestre/) e a instância de
+     demonstração (/cartaomestre-demo/app/, 2º checkout do mesmo repo) — o
+     aviso abaixo só liga por checagem de path da URL, não por arquivo
+     separado, pra não divergir a fonte de verdade entre as duas. -->
+    <div
+      id="demo-banner"
+      class="hidden sticky top-0 z-50 text-center text-xs sm:text-sm font-semibold py-2 px-4 cm-glass-warn text-amber-200"
+    >
+      ⚠️ Ambiente de demonstração — dados fictícios, não reflete o sistema real
+    </div>
+    <script>
+      if (location.pathname.includes('/cartaomestre-demo/')) {
+        document.getElementById('demo-banner').classList.remove('hidden');
+      }
+    </script>
     <div class="cm-aurora" aria-hidden="true">
       <div class="cm-aurora__blob cm-aurora__blob--1"></div>
       <div class="cm-aurora__blob cm-aurora__blob--2"></div>
