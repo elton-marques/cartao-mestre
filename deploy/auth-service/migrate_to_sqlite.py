@@ -97,8 +97,12 @@ def _fix_migrated_timestamps():
 
 
 if __name__ == "__main__":
-    if os.path.exists(db.DB_FILE):
-        resp = input(f"{db.DB_FILE} já existe. Continuar mesmo assim? [s/N] ")
+    # `import db` já cria o arquivo/tabelas vazios (efeito de init_db() no
+    # import) mesmo numa VPS nova — checar a existência do arquivo não serve
+    # pra detectar migração repetida. O sinal real é ter usuário já
+    # cadastrado no banco.
+    if db.list_users():
+        resp = input(f"{db.DB_FILE} já tem usuário(s) cadastrado(s). Continuar mesmo assim? [s/N] ")
         if resp.strip().lower() != "s":
             sys.exit(0)
 
