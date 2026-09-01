@@ -9,6 +9,14 @@ reproduzir/atualizar de outro PC sem precisar redescobrir tudo.
 > repositórios independentes. O hub (raiz de `eltonmarques.com`) fica no
 > outro repo; aqui só o que é do Cartão Mestre.
 
+> **Instalação em intranet** (servidor da empresa, sem Cloudflare, sem
+> domínio público): ver `deploy/intranet/README-INTRANET.md` — mesmas peças,
+> configuração diferente (nginx na rede, cookie sem `Secure` em HTTP, CSVs
+> vindos de pasta de rede). O `server.py`/`db.py` são os mesmos arquivos nas
+> duas instalações; o que muda vai por variável de ambiente (`CM_DB_FILE`,
+> `CM_SECRET_FILE`, `CM_COOKIE_SECURE`, `CM_LISTEN_HOST`/`CM_LISTEN_PORT`),
+> cujos defaults são exatamente o comportamento da VPS descrito aqui.
+
 ## Topologia
 
 A VPS **não expõe portas 80/443 diretamente** (firewall só libera 22/SSH e

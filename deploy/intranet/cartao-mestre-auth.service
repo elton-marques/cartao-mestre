@@ -1,0 +1,28 @@
+[Unit]
+Description=Cartao Mestre - servico de sessao (cookie) do dashboard
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/cartao-mestre-auth/server.py
+WorkingDirectory=/opt/cartao-mestre-auth
+Restart=always
+RestartSec=2
+
+# Ajuste para um usuario de servico existente no servidor da empresa.
+User=cartaomestre
+Group=cartaomestre
+
+# CM_COOKIE_SECURE=0 e obrigatorio enquanto a intranet servir o app por HTTP
+# puro: com Secure, o navegador descarta o cookie e o login nunca "pega".
+# Se o servidor passar a ter HTTPS (certificado interno), remova esta linha.
+Environment=CM_COOKIE_SECURE=0
+Environment=CM_DB_FILE=/etc/cartao-mestre/cartao-mestre.db
+Environment=CM_SECRET_FILE=/etc/cartao-mestre/secret.key
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/etc/cartao-mestre
+
+[Install]
+WantedBy=multi-user.target
