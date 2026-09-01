@@ -348,7 +348,8 @@ meses reais vindos da pasta de rede.
 | Toda página cai em 502 | Serviço de sessão parado. `systemctl status cartao-mestre-auth` / serviço no Windows. |
 | Dashboard abre com dados que não são da filial | Pasta de rede não montada; o app entrou no fallback de dados de exemplo. Confira a seção 4. |
 | Um mês não aparece | Nome do arquivo diferente do esperado (acento, grafia). Os nomes precisam bater exatamente. |
-| Histórico de login mostra IP `127.0.0.1` | O bloco `/auth/` do nginx está sem `proxy_set_header X-Forwarded-For`. |
+| Histórico de login mostra IP `127.0.0.1` | O bloco `/auth/` do nginx está sem `proxy_set_header X-Forwarded-For`. Além do histórico errado, isso faz o rate-limit de senha tratar a rede toda como um cliente só. |
+| Usuário recebe 429 ao tentar entrar | Rate-limit: 5 senhas erradas do mesmo IP em 15 minutos bloqueiam novas tentativas por mais 15 minutos. Passado o prazo, libera sozinho; reiniciar o serviço de sessão zera na hora. |
 | Histórico mostra país/cidade em branco | Esperado: essa informação vinha da borda da Cloudflare, que não existe na intranet. |
 
 ---
