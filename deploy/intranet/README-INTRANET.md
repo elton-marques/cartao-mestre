@@ -4,6 +4,11 @@ Documento de instalação para a equipe de TI. Descreve como publicar o
 dashboard **Cartão Mestre** em um servidor da rede interna, acessível pelo
 navegador dos usuários em `http://<servidor>/cartaomestre/`.
 
+> Existe um caminho mais simples: publicar só o dashboard, sem tela de
+> login, dentro de um servidor web que a empresa já tem — copiar uma pasta e
+> pronto. Ver `README-ESTATICO.md`. Este documento aqui é a instalação
+> completa, com login próprio, papéis e histórico de acessos.
+
 Esta pasta (`deploy/intranet/`) contém a variante dos arquivos de
 configuração para rede interna. A pasta irmã `deploy/` documenta a
 instalação pública original (VPS + Cloudflare Tunnel) e **não** deve ser

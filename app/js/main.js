@@ -12,6 +12,14 @@
 // fictícios).
 const IS_DEMO = location.pathname.includes('/cartaomestre-demo/');
 
+// Instalação sem serviço de sessão: o pacote estático da intranet (ver
+// deploy/intranet/preparar-pacote-estatico.py) é só o dashboard copiado pro
+// servidor web que a empresa já tem — não existe /auth/, então não há
+// usuário logado, nem logout, nem histórico. O menu de conta inteiro sai do
+// header em vez de virar botão que não leva a lugar nenhum. Aqui é sempre
+// false; quem vira pra true é o script que monta aquele pacote.
+const SEM_LOGIN = false;
+
 const state = {
   // Matrícula órfã NÃO é um filtro de dado (ver applyFilters em aggregate.js):
   // é uma liberação real, só sem cadastro em COLABORADORES.csv (que pode
@@ -227,6 +235,12 @@ function renderFilterBar() {
     onExportExcel: () => { state.openDropdown = null; renderFilterBar(); exportSpreadsheet(); },
     onExportPDF: () => { state.openDropdown = null; renderFilterBar(); exportPDF(); },
   });
+  // Sem serviço de sessão não há conta pra mostrar nem sessão pra encerrar —
+  // o header fica só com os filtros e a exportação.
+  if (SEM_LOGIN) {
+    e.accountMenu.innerHTML = '';
+    return;
+  }
   renderAccountMenu(e.accountMenu, {
     isOpen: state.openDropdown === 'account',
     username: state.username,
@@ -626,7 +640,9 @@ async function boot() {
   // falhar (dev local sem o serviço de auth na frente), fetchUsername
   // engole o erro e devolve null — o dashboard sobe normalmente, só o
   // rótulo do menu cai pro genérico "Conta".
-  if (IS_DEMO) {
+  if (SEM_LOGIN) {
+    // Nada a consultar: não há /auth/ nessa instalação.
+  } else if (IS_DEMO) {
     // Na instância demo, mascara o usuário real (ex: prevencao.cau) por um
     // rótulo genérico (evita vazar o nome de conta real numa página que
     // anuncia "dados fictícios, não reflete o sistema real") e não faz a

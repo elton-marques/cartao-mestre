@@ -27,53 +27,20 @@ import sys
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _ajustes import (  # noqa: E402
+    AjusteNaoAplicado,
+    despersonalizar_app,
+    remover_link,
+    substituir,
+)
+
 RAIZ = Path(__file__).resolve().parents[2]
 DESTINO = RAIZ / "dist" / "cartao-mestre-intranet"
 
 
-class AjusteNaoAplicado(Exception):
-    """Trecho esperado não encontrado — HTML mudou, script precisa de revisão."""
-
-
-def remover_link(html, marcador, arquivo):
-    """Remove o elemento <a> inteiro que contém `marcador`.
-
-    Recorta do `<a` que abre o elemento até o `</a>` que o fecha, em vez de
-    casar o bloco inteiro por string literal — assim uma mudança de classe
-    ou de indentação no meio da tag não quebra o script.
-    """
-    pos = html.find(marcador)
-    if pos == -1:
-        raise AjusteNaoAplicado(f"{arquivo}: não achei {marcador!r}")
-    inicio = html.rfind("<a", 0, pos)
-    fim = html.find("</a>", pos)
-    if inicio == -1 or fim == -1:
-        raise AjusteNaoAplicado(f"{arquivo}: {marcador!r} não está dentro de um <a>")
-    return html[:inicio].rstrip() + "\n" + html[fim + len("</a>"):].lstrip("\n")
-
-
-def substituir(texto, de, para, arquivo):
-    if de not in texto:
-        raise AjusteNaoAplicado(f"{arquivo}: não achei {de!r}")
-    return texto.replace(de, para)
-
-
 def ajustar_app_index(caminho):
-    html = caminho.read_text(encoding="utf-8")
-    nome = caminho.name
-    html = remover_link(html, "mailto:contato@eltonmarques.com", nome)
-    html = remover_link(html, "github.com/elton-marques", nome)
-    html = remover_link(html, "Voltar ao hub", nome)
-    # Cabeçalho: no site pessoal a assinatura no título faz sentido; num
-    # sistema interno o nome próprio ao lado do nome do sistema, não. O
-    # crédito continua no rodapé.
-    html = substituir(html, "Dashboard · Elton Marques", "Dashboard", nome)
-    html = substituir(
-        html,
-        "eltonmarques.com · desenvolvido por Elton Marques",
-        "desenvolvido por Elton Marques",
-        nome,
-    )
+    html = despersonalizar_app(caminho.read_text(encoding="utf-8"), caminho.name)
     caminho.write_text(html, encoding="utf-8")
 
 
