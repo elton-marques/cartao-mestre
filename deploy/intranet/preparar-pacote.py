@@ -64,6 +64,10 @@ def ajustar_app_index(caminho):
     html = remover_link(html, "mailto:contato@eltonmarques.com", nome)
     html = remover_link(html, "github.com/elton-marques", nome)
     html = remover_link(html, "Voltar ao hub", nome)
+    # Cabeçalho: no site pessoal a assinatura no título faz sentido; num
+    # sistema interno o nome próprio ao lado do nome do sistema, não. O
+    # crédito continua no rodapé.
+    html = substituir(html, "Dashboard · Elton Marques", "Dashboard", nome)
     html = substituir(
         html,
         "eltonmarques.com · desenvolvido por Elton Marques",
