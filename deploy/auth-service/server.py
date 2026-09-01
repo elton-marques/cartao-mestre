@@ -49,10 +49,24 @@ import time
 
 import db
 
-SECRET_FILE = "/etc/cartao-mestre/secret.key"
+# Todos os defaults abaixo são os da VPS (eltonmarques.com, atrás do
+# Cloudflare Tunnel, sempre HTTPS). As variáveis de ambiente existem pra
+# instalação em intranet/Windows não precisar de fork do código — ver
+# deploy/intranet/README-INTRANET.md.
+SECRET_FILE = os.environ.get("CM_SECRET_FILE", "/etc/cartao-mestre/secret.key")
 SESSION_TTL = 12 * 3600  # 12h
 COOKIE_NAME = "cm_session"
-LISTEN = ("127.0.0.1", 8082)
+LISTEN = (
+    os.environ.get("CM_LISTEN_HOST", "127.0.0.1"),
+    int(os.environ.get("CM_LISTEN_PORT", "8082")),
+)
+# O atributo Secure faz o navegador só mandar o cookie de volta em HTTPS.
+# Em intranet servida por HTTP puro isso quebra o login de um jeito
+# silencioso (a resposta é 200, o cookie é descartado, o /verify seguinte dá
+# 401 e a tela volta pro login) — por isso é desligável. Só desligue em rede
+# interna: sem HTTPS, senha e cookie trafegam em texto claro na LAN.
+COOKIE_SECURE = os.environ.get("CM_COOKIE_SECURE", "1") != "0"
+SECURE_ATTR = " Secure;" if COOKIE_SECURE else ""
 HISTORY_MAX_ROWS = 500  # retorna só os últimos N logins na resposta de /history
 
 
@@ -225,7 +239,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 token = make_token(username)
                 cookie = (
                     f"{COOKIE_NAME}={token}; Path=/; Max-Age={SESSION_TTL}; "
-                    f"HttpOnly; Secure; SameSite=Lax"
+                    f"HttpOnly;{SECURE_ATTR} SameSite=Lax"
                 )
                 ip = get_client_ip(self.headers, self.client_address)
                 country, city = get_location(self.headers)
@@ -237,7 +251,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
 
         if self.path.startswith("/logout"):
-            cookie = f"{COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"
+            cookie = f"{COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly;{SECURE_ATTR} SameSite=Lax"
             self._send_json(200, {"ok": True}, [("Set-Cookie", cookie)])
             return
 

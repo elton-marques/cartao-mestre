@@ -26,3 +26,6 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+# Pacote de instalação gerado por deploy/intranet/preparar-pacote.py (descartável)
+dist/

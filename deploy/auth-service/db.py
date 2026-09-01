@@ -32,7 +32,11 @@ import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 
-DB_FILE = "/etc/cartao-mestre/cartao-mestre.db"
+# Caminho do banco. O default é o da VPS; a variável de ambiente CM_DB_FILE
+# existe pra instalações fora dela (intranet da empresa, Windows, testes)
+# poderem apontar pra outro lugar sem editar código — ver
+# deploy/intranet/README-INTRANET.md.
+DB_FILE = os.environ.get("CM_DB_FILE", "/etc/cartao-mestre/cartao-mestre.db")
 PBKDF2_ITERATIONS = 100_000
 ROLES = ("admin", "viewer")
 
