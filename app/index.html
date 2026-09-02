@@ -243,6 +243,32 @@
           animation: none;
         }
       }
+
+      /* Imprimir a página direto (Ctrl+P) dá um resultado ruim: o tema é
+         escuro, e o navegador imprime sem cor de fundo por padrão — some o
+         fundo dos cards, somem as barras dos gráficos e sobra texto solto.
+         Quem quer PDF quer o relatório de "Exportar", que é feito pra papel
+         (tema claro, gráficos que sobrevivem à impressão). Então a impressão
+         da página mostra só o recado que leva pra lá. */
+      #print-aviso {
+        display: none;
+      }
+      @media print {
+        body > *:not(#print-aviso) {
+          display: none !important;
+        }
+        #print-aviso {
+          display: block;
+          padding: 24px;
+          color: #111827;
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 14px;
+          line-height: 1.6;
+        }
+        #print-aviso strong {
+          font-size: 16px;
+        }
+      }
     </style>
   </head>
   <body class="min-h-screen bg-neutral-950 text-white antialiased">
@@ -474,6 +500,17 @@
           eltonmarques.com · desenvolvido por Elton Marques
         </p>
       </footer>
+    </div>
+
+    <!-- Só aparece na impressão (ver @media print no topo): o painel não
+     imprime bem, e o caminho certo pro PDF é o menu Exportar. -->
+    <div id="print-aviso">
+      <strong>Cartão Mestre — impressão</strong><br />
+      Esta página é um painel interativo e não imprime bem em papel.<br />
+      Para gerar o relatório em PDF, cancele esta impressão e use
+      <strong>Exportar → Relatório PDF</strong>, no topo do dashboard: ele abre
+      uma versão feita para impressão, com os gráficos e os números do filtro
+      atual.
     </div>
 
     <div id="colaborador-modal-root"></div>

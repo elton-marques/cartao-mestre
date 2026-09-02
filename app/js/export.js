@@ -267,6 +267,13 @@ function buildPrintReportHTML({ records, filters, duplicatesRemoved }) {
 <style>
   @page { margin: 16mm 14mm; }
   * { box-sizing: border-box; }
+  /* O navegador imprime sem cor de fundo por padrão (a opção "Gráficos de
+     segundo plano" da caixa de impressão vem desmarcada) — e as barras deste
+     relatório SÃO fundos coloridos, então saíam páginas só com texto. Com
+     print-color-adjust: exact, o navegador é obrigado a imprimir os fundos.
+     As barras ainda ganham borda logo abaixo, como segunda linha de defesa
+     em navegador que ignore esta propriedade. */
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: Arial, Helvetica, sans-serif; color: #111827; margin: 0; padding: 24px; background: #fff; }
   .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
   .brand-icon { width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; background: #0f1720; display: flex; align-items: center; justify-content: center; }
@@ -280,8 +287,11 @@ function buildPrintReportHTML({ records, filters, duplicatesRemoved }) {
   .section { break-inside: avoid; }
   .bar-row { display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 5px; }
   .bar-label { width: 160px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bar-track { flex: 1; background: #f3f4f6; border-radius: 4px; height: 11px; overflow: hidden; }
-  .bar-fill { height: 100%; background: #2563eb; }
+  /* Borda em vez de só fundo: se a impressão descartar as cores de fundo, a
+     barra continua legível como um retângulo vazio do tamanho certo — a
+     proporção entre os itens, que é o que o gráfico comunica, sobrevive. */
+  .bar-track { flex: 1; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; height: 12px; overflow: hidden; }
+  .bar-fill { height: 100%; background: #2563eb; border: 1px solid #1d4ed8; }
   .bar-count { width: 90px; text-align: right; flex-shrink: 0; color: #374151; }
   .note { font-size: 10px; color: #9ca3af; margin-top: 4px; }
   table { width: 100%; border-collapse: collapse; font-size: 11px; }
@@ -330,7 +340,7 @@ function buildPrintReportHTML({ records, filters, duplicatesRemoved }) {
 
   ${irregularesSection}
 
-  <p class="footer">eltonmarques.com · Cartão Mestre — dashboard interno · relatório gerado automaticamente, não é documento oficial</p>
+  <p class="footer">Cartão Mestre — dashboard interno · relatório gerado automaticamente, não é documento oficial</p>
 
   <script>
     // Dispara a caixa de impressão sozinho ao carregar — "Salvar como PDF"
