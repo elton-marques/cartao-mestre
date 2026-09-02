@@ -26,9 +26,11 @@ como uma URL só. Isso exige reescrever os caminhos relativos `../` que o app
 usa quando é servido em `/cartaomestre/` com as pastas irmãs um nível acima.
 """
 import argparse
+import re
 import shutil
 import sys
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -61,14 +63,17 @@ As planilhas ficam em cartao-mestre\\dados\\csv\\. Para atualizar, substitua
 os arquivos por la - a pagina passa a mostrar os novos dados no proximo
 carregamento, sem reiniciar nada.
 
-Os nomes dos arquivos precisam ser exatamente estes (inclusive o acento e a
-grafia de FEVEVEIRO, que vem assim da origem):
+Mes novo e so soltar o arquivo na mesma pasta: o dashboard descobre sozinho
+no proximo carregamento. Nao precisa mexer em codigo nem avisar ninguem.
 
-  JANEIRO.csv  FEVEVEIRO.csv  MARCO.csv (com cedilha)  ABRIL.csv
+O nome do arquivo precisa ser o nome do mes em MAIUSCULAS:
+
+  JANEIRO.csv  FEVEREIRO.csv  MARCO.csv  ABRIL.csv  MAIO.csv  ...
   COLABORADORES.csv  GESTORES.csv
 
-Mes novo tambem exige uma linha nova em js\\data.js (lista MONTHLY_FILES) -
-peca a quem mantem o sistema.
+Marco vale com ou sem cedilha, e FEVEVEIRO.csv (a grafia que veio da origem)
+continua aceito. Nome fora desse padrao e ignorado - o mes simplesmente nao
+aparece no painel.
 
 ACESSO
 ------
@@ -89,11 +94,29 @@ SE NAO FUNCIONAR
 """
 
 
-def ajustar_index(caminho):
-    """Despersonaliza e aponta o design-system para a pasta irmã, não `../`."""
+def ajustar_index(caminho, versao):
+    """Despersonaliza, aponta o design-system para a pasta irmã e versiona os assets."""
     html = despersonalizar_app(caminho.read_text(encoding="utf-8"), caminho.name)
     html = substituir(html, "../design-system/", "design-system/", caminho.name)
+    html = versionar_assets(html, versao)
     caminho.write_text(html, encoding="utf-8")
+
+
+def versionar_assets(html, versao):
+    """Acrescenta ?v=<versao> aos .js/.css locais da página.
+
+    Numa instalação estática ninguém controla cabeçalho de cache do servidor:
+    depois de recopiar a pasta, o navegador de quem já tinha visitado pode
+    continuar rodando o JavaScript antigo por horas — e um arquivo velho junto
+    com um novo costuma dar tela em branco, não "versão anterior". Como a
+    query muda a cada pacote gerado, o navegador é obrigado a buscar de novo.
+    Os CSVs não precisam disso: data.js já os lê com revalidação.
+    """
+    return re.sub(
+        r'(src|href)="((?:js|design-system)/[^"]+\.(?:js|css))"',
+        lambda m: f'{m.group(1)}="{m.group(2)}?v={versao}"',
+        html,
+    )
 
 
 def ajustar_data_js(caminho):
@@ -151,7 +174,7 @@ def main():
     (DESTINO / "LEIA-ME.txt").write_text(LEIA_ME, encoding="utf-8")
 
     try:
-        ajustar_index(DESTINO / "index.html")
+        ajustar_index(DESTINO / "index.html", datetime.now().strftime("%Y%m%d%H%M"))
         ajustar_data_js(DESTINO / "js" / "data.js")
         ajustar_main_js(DESTINO / "js" / "main.js")
     except AjusteNaoAplicado as erro:

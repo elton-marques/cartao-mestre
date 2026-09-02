@@ -3,9 +3,9 @@
  * de registros já limpa (ver data.js) — nada de parsing de CSV aqui.
  */
 
-// Derivado de MONTHLY_FILES (data.js) — fonte única da verdade sobre quais
-// meses existem. Adicionar um mês novo em data.js já propaga pra cá.
-const MESES_ORDEM = MONTHLY_FILES.map((f) => f.mes);
+// MESES_ORDEM é global, declarado em data.js e preenchido pelo loadAll() com
+// os meses que existem de fato no diretório de dados — as funções daqui só
+// rodam depois disso. Soltar um CSV novo em dados/csv/ já propaga pra cá.
 const MESES_ABREV_ANO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const DIAS_ORDEM = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 // Faixas dentro do expediente real da loja: abre
@@ -151,7 +151,7 @@ function dailyTrend(records) {
   });
 }
 
-/** Variação do último mês da linha do tempo (MONTHLY_FILES) vs o mês anterior a ele.
+/** Variação do último mês da linha do tempo (MESES_ORDEM) vs o mês anterior a ele.
  * Sempre compara os dois últimos meses cronológicos, não os dois com mais eventos —
  * é "como fechou o mês mais recente", não um ranking. `pct: null` quando o mês
  * anterior não teve nenhum evento (não dá pra calcular variação percentual). */

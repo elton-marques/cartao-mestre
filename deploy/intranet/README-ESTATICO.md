@@ -76,9 +76,9 @@ publicada. A página mostra os novos números no próximo carregamento; nada
 para reiniciar. Os nomes precisam bater exatamente com os atuais, acento e
 tudo (inclusive `FEVEVEIRO.csv`, que vem com essa grafia da origem).
 
-**Mês novo** — além do arquivo, entra uma linha na lista `MONTHLY_FILES` de
-`js/data.js` (ver "Adicionar um novo mês" em `app/README.md`). Na prática:
-gerar o pacote de novo e recopiar.
+**Mês novo** — mesma coisa: soltar `MAIO.csv` na pasta `dados/csv/` e
+pronto. O dashboard descobre os meses sozinho a cada carregamento; nada de
+código muda. O nome precisa ser o mês em maiúsculas.
 
 **Versão nova do dashboard** — gerar o pacote e recopiar a pasta.
 

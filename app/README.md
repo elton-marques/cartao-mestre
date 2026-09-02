@@ -62,18 +62,29 @@ acabou de clonar o repositório.
 
 ## Adicionar um novo mês
 
-1. Coloque o CSV do mês em `dados/csv/` (mesmo formato dos existentes: banner
-   na linha 1, linha 2 em branco, cabeçalho real na linha 3 — ver
-   `CLAUDE.md` da raiz do repo).
-2. Abra `app/js/data.js` e acrescente uma linha em `MONTHLY_FILES`, na ordem
-   cronológica, ex.: `{ file: 'MAIO.csv', mes: 'Maio' }`.
-3. Pronto — filtro de período, tendência mensal, KPIs e o texto do
-   cabeçalho ("jan/2026 – mai/2026" etc.) se recalculam sozinhos a partir
-   dessa lista; nenhum outro arquivo precisa mudar.
+Solte o CSV em `dados/csv/` com o nome do mês em maiúsculas (`MAIO.csv`) e
+pronto. Nenhum arquivo de código precisa ser tocado: filtro de período,
+tendência mensal, KPIs e o texto do cabeçalho ("jan/2026 – mai/2026") se
+recalculam sozinhos no próximo carregamento da página.
 
-Se o nome do arquivo-fonte vier com acento/typo (como aconteceu com
-`FEVEVEIRO.csv`), copie o nome exatamente como está no arquivo — o `file`
-tem que bater com o nome real salvo em disco.
+O formato do arquivo é o mesmo dos existentes: banner na linha 1, linha 2 em
+branco, cabeçalho real na linha 3 — ver `CLAUDE.md` da raiz do repo.
+
+Como a descoberta é feita: não dá para listar o conteúdo de uma pasta pelo
+navegador (servidor web não entrega índice de diretório por padrão, e é isso
+que permite servir o dashboard como arquivos estáticos em qualquer lugar).
+Então o app pede ao servidor cada nome de mês possível e fica com os que
+existem — ver `MESES_CANONICOS` em `app/js/data.js`.
+
+Por isso o nome importa: precisa ser o nome do mês em maiúsculas. As grafias
+alternativas aceitas estão na mesma lista — `FEVEVEIRO.csv` (o typo que veio
+do arquivo-fonte original) continua valendo, e março é aceito com ou sem
+cedilha. Nome fora dessas opções é simplesmente ignorado, sem erro na tela.
+
+Arquivo que existe mas não tem nenhuma linha de liberação válida fica de fora
+do dashboard (com um aviso no console do navegador) — um mês zerado na
+tendência sugeriria "não houve ocorrência" quando o caso real é arquivo vazio
+ou fora do formato.
 
 ## Pendente
 

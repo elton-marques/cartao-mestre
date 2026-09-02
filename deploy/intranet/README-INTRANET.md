@@ -361,11 +361,10 @@ meses reais vindos da pasta de rede.
 
 ## 9. Atualizações
 
-**Novo mês de dados** — o arquivo do mês entra na pasta de rede e a
-aplicação precisa passar a conhecê-lo: é uma linha na lista `MONTHLY_FILES`
-de `app/js/data.js` (ver `app/README.md`, seção "Adicionar um novo mês").
-Feita a alteração no projeto, basta recopiar a pasta `app/` para o servidor;
-não há reinício de serviço nem de nginx.
+**Novo mês de dados** — basta o arquivo entrar na pasta de rede, com o nome
+do mês em maiúsculas (`MAIO.csv`). O dashboard descobre os meses disponíveis
+a cada carregamento; nada de código muda, nada é recopiado, nenhum serviço
+reinicia.
 
 **Nova versão do dashboard** — recopiar `app/` e `design-system/`. Os
 arquivos são servidos com `Cache-Control: no-store`, então o usuário pega a
