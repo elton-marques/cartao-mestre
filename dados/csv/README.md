@@ -25,10 +25,11 @@ multi-linha entre aspas.
   populam a coluna `RESPONSÁVEL PELA AUTORIZAÇÃO` dos logs mensais, às
   vezes prefixados com código de grupo (ex.: `GR4 - FULANO DE TAL`).
 
-- **Logs mensais de uso** — um arquivo por mês (`JANEIRO.csv`,
-  `FEVEVEIRO.csv` — grafia com erro na fonte original, é assim mesmo,
-  `MARÇO.csv`, `ABRIL.csv`, e os meses seguintes conforme forem chegando).
-  Cada um é um log de uso do Cartão Mestre: quem contornou uma restrição
+- **Logs mensais de uso** — um arquivo por mês, dentro de uma pasta por ano
+  (`2026/JANEIRO.csv`, `2026/FEVEREIRO.csv`, … e `2027/` quando chegar a
+  virada). `COLABORADORES.csv` e `GESTORES.csv` ficam na raiz desta pasta,
+  porque valem para todos os anos.
+  Cada arquivo mensal é um log de uso do Cartão Mestre: quem contornou uma restrição
   de checkout/acesso, quando, e qual gestor autorizou. Layout:
   - Linha 1: banner — `Controle de Uso do Cartão Mestre,...,"FILIAL: 00\nCIDADE"`
   - Linha 2: em branco
@@ -38,11 +39,16 @@ multi-linha entre aspas.
 
 ## Adicionar um novo mês
 
-1. Coloque o CSV do mês novo aqui, seguindo exatamente o mesmo formato
-   (banner na linha 1, linha em branco na linha 2, cabeçalho na linha 3).
-2. Abra `app/js/data.js` e acrescente uma linha em `MONTHLY_FILES`, na
-   ordem cronológica — ex.: `{ file: 'MAIO.csv', mes: 'Maio' }`. O nome em
-   `file` precisa bater exatamente com o nome salvo em disco (inclusive
-   erros de grafia/acentuação, como em `FEVEVEIRO.csv`).
+Coloque o CSV na pasta do ano (`2026/`), seguindo o mesmo formato (banner na
+linha 1, linha em branco na linha 2, cabeçalho na linha 3). Nada mais: o app
+descobre os meses sozinho a cada carregamento.
+
+O nome do arquivo é o nome do mês, por extenso ou abreviado em três letras,
+em qualquer caixa — `MAIO.csv`, `maio.csv`, `Maio.csv`, `MAI.csv` valem
+igual. Março vale com ou sem cedilha, e `FEVEVEIRO.csv` (o typo da fonte
+original) continua aceito, embora os arquivos daqui já usem `FEVEREIRO.csv`.
+
+Ano novo: crie a pasta (`2027/`) e coloque os meses lá dentro. Com mais de um
+ano publicado, os rótulos do painel passam a incluir o ano ("Janeiro/2026").
 
 Mais detalhes de limpeza/normalização em `app/README.md`.

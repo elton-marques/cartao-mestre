@@ -62,24 +62,50 @@ acabou de clonar o repositório.
 
 ## Adicionar um novo mês
 
-Solte o CSV em `dados/csv/` com o nome do mês em maiúsculas (`MAIO.csv`) e
-pronto. Nenhum arquivo de código precisa ser tocado: filtro de período,
-tendência mensal, KPIs e o texto do cabeçalho ("jan/2026 – mai/2026") se
-recalculam sozinhos no próximo carregamento da página.
+Solte o CSV na pasta do ano (`dados/csv/2026/MAIO.csv`) e pronto. Nenhum
+arquivo de código precisa ser tocado: filtro de período, tendência mensal,
+KPIs e o texto do cabeçalho ("jan/2026 – mai/2026") se recalculam sozinhos no
+próximo carregamento da página.
 
 O formato do arquivo é o mesmo dos existentes: banner na linha 1, linha 2 em
 branco, cabeçalho real na linha 3 — ver `CLAUDE.md` da raiz do repo.
 
-Como a descoberta é feita: não dá para listar o conteúdo de uma pasta pelo
-navegador (servidor web não entrega índice de diretório por padrão, e é isso
-que permite servir o dashboard como arquivos estáticos em qualquer lugar).
-Então o app pede ao servidor cada nome de mês possível e fica com os que
-existem — ver `MESES_CANONICOS` em `app/js/data.js`.
+### Nome do arquivo
 
-Por isso o nome importa: precisa ser o nome do mês em maiúsculas. As grafias
-alternativas aceitas estão na mesma lista — `FEVEVEIRO.csv` (o typo que veio
-do arquivo-fonte original) continua valendo, e março é aceito com ou sem
-cedilha. Nome fora dessas opções é simplesmente ignorado, sem erro na tela.
+O nome é o do mês, por extenso ou abreviado em três letras, em qualquer
+caixa — todos estes são o mesmo mês:
+
+```
+MAIO.csv    maio.csv    Maio.csv    MAI.csv    mai.csv    Mai.csv
+```
+
+Março vale com e sem cedilha. `FEVEVEIRO.csv` (o typo que veio do
+arquivo-fonte original) continua aceito, embora os arquivos do repositório já
+usem `FEVEREIRO.csv`. As grafias ficam em `MESES_CANONICOS`, em
+`app/js/data.js`. Nome fora desse conjunto é ignorado, sem erro na tela.
+
+### Ano novo
+
+Crie a pasta do ano (`dados/csv/2027/`) e coloque os meses lá dentro.
+`COLABORADORES.csv` e `GESTORES.csv` continuam na raiz de `dados/csv/`,
+porque valem para todos os anos. Com mais de um ano publicado, os rótulos
+passam a incluir o ano ("Janeiro/2026"); com um ano só, continuam sendo só o
+nome do mês.
+
+Instalação antiga, com os arquivos mensais soltos direto em `dados/csv/`,
+continua funcionando: só é usada quando nenhuma pasta de ano é encontrada.
+
+### Como a descoberta funciona
+
+Não dá para listar o conteúdo de uma pasta pelo navegador (servidor web não
+entrega índice de diretório por padrão, e é isso que permite servir o
+dashboard como arquivos estáticos em qualquer lugar). Então o app pede ao
+servidor cada nome possível e fica com os que existem.
+
+Para não multiplicar requisições à toa, ele primeiro descobre se o servidor
+diferencia maiúsculas de minúsculas — pedindo um arquivo conhecido em
+minúsculo. Em Windows/IIS, que ignora caixa, testa só uma grafia por nome;
+em Linux, testa as três.
 
 Arquivo que existe mas não tem nenhuma linha de liberação válida fica de fora
 do dashboard (com um aviso no console do navegador) — um mês zerado na

@@ -128,14 +128,23 @@ administradores.
 
 ## 4. Origem dos dados (pasta de rede)
 
-Os CSVs (`JANEIRO.csv`, `FEVEVEIRO.csv`, `MARÇO.csv`, `ABRIL.csv`,
-`COLABORADORES.csv`, `GESTORES.csv`) ficam em um compartilhamento de rede
-onde a equipe já salva as planilhas. O servidor só precisa de **leitura**.
+Os CSVs ficam em um compartilhamento de rede onde a equipe já salva as
+planilhas. O servidor só precisa de **leitura**. A estrutura esperada é uma
+pasta por ano, com os cadastros fixos na raiz:
+
+```
+COLABORADORES.csv
+GESTORES.csv
+2026/JANEIRO.csv
+2026/FEVEREIRO.csv
+...
+```
 
 Dois detalhes importantes:
 
-- Os nomes dos arquivos são lidos exatamente como estão, **com acento e com
-  o erro de grafia de origem** (`FEVEVEIRO.csv`, não `FEVEREIRO.csv`). O
+- O nome do arquivo mensal é o nome do mês, por extenso ou abreviado em três
+  letras, em qualquer caixa (`MAIO.csv`, `maio.csv`, `MAI.csv` — todos
+  valem); março, com ou sem cedilha. Como nomes com acento são aceitos, o
   compartilhamento e a montagem precisam preservar acentuação — daí o
   `iocharset=utf8` no exemplo abaixo.
 - Se a pasta estiver vazia ou inacessível, o dashboard **não quebra**: ele
@@ -361,10 +370,10 @@ meses reais vindos da pasta de rede.
 
 ## 9. Atualizações
 
-**Novo mês de dados** — basta o arquivo entrar na pasta de rede, com o nome
-do mês em maiúsculas (`MAIO.csv`). O dashboard descobre os meses disponíveis
+**Novo mês de dados** — basta o arquivo entrar na pasta do ano dentro do
+compartilhamento (`2026/MAIO.csv`). O dashboard descobre os meses disponíveis
 a cada carregamento; nada de código muda, nada é recopiado, nenhum serviço
-reinicia.
+reinicia. Ano novo é só criar a pasta correspondente.
 
 **Nova versão do dashboard** — recopiar `app/` e `design-system/`. Os
 arquivos são servidos com `Cache-Control: no-store`, então o usuário pega a

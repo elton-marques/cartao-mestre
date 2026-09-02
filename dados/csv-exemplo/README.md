@@ -17,7 +17,8 @@ no topo de `app/js/data.js`.
 A forma, não o conteúdo — para o dashboard ter o que mostrar em todos os
 painéis:
 
-- volume por mês (jan–abr/2026) e concentração de horários no expediente
+- volume por mês (jan–abr/2026, em `2026/`, mesmo layout de pasta por ano
+  dos dados reais) e concentração de horários no expediente
   (07:40–20:20);
 - distribuição de motivos, com `HORÁRIO NEGADO` dominando;
 - gestores com pesos diferentes, alguns grafados com travessão (`–`) em
@@ -37,5 +38,10 @@ Da raiz do repositório:
 python dados/csv-exemplo/gerar.py
 ```
 
-A semente é fixa (`random.seed`), então a saída é reprodutível. Mudar a
+A saída vai para `2026/` (arquivos mensais) e para a raiz
+(`COLABORADORES.csv`, `GESTORES.csv`).
+
+A semente é fixa (`random.seed`), mas a geração passa por conjuntos, cuja
+ordem de iteração muda a cada processo — então regerar produz outro conjunto
+com as mesmas características, não um arquivo idêntico. Mudar a
 semente ou as listas gera outro conjunto com as mesmas características.

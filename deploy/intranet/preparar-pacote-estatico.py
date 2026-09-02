@@ -59,21 +59,25 @@ e quase sempre isso (ver "SE NAO FUNCIONAR").
 
 DADOS
 -----
-As planilhas ficam em cartao-mestre\\dados\\csv\\. Para atualizar, substitua
-os arquivos por la - a pagina passa a mostrar os novos dados no proximo
-carregamento, sem reiniciar nada.
+As planilhas ficam em cartao-mestre\\dados\\csv\\, organizadas por ano:
 
-Mes novo e so soltar o arquivo na mesma pasta: o dashboard descobre sozinho
+  dados\\csv\\COLABORADORES.csv     <- vale para todos os anos
+  dados\\csv\\GESTORES.csv          <- idem
+  dados\\csv\\2026\\JANEIRO.csv      <- um arquivo por mes, dentro do ano
+  dados\\csv\\2026\\FEVEREIRO.csv
+  ...
+
+Mes novo e so soltar o arquivo na pasta do ano: o dashboard descobre sozinho
 no proximo carregamento. Nao precisa mexer em codigo nem avisar ninguem.
+Ano novo e so criar a pasta (2027\\) e ir colocando os meses la dentro.
 
-O nome do arquivo precisa ser o nome do mes em MAIUSCULAS:
+O nome do arquivo e o nome do mes - por extenso ou abreviado em tres letras,
+maiusculo ou minusculo, tanto faz:
 
-  JANEIRO.csv  FEVEREIRO.csv  MARCO.csv  ABRIL.csv  MAIO.csv  ...
-  COLABORADORES.csv  GESTORES.csv
+  JANEIRO.csv   janeiro.csv   Janeiro.csv   JAN.csv   jan.csv
 
-Marco vale com ou sem cedilha, e FEVEVEIRO.csv (a grafia que veio da origem)
-continua aceito. Nome fora desse padrao e ignorado - o mes simplesmente nao
-aparece no painel.
+Marco vale com ou sem cedilha. Nome fora desse padrao e ignorado - o mes
+simplesmente nao aparece no painel.
 
 ACESSO
 ------
@@ -167,8 +171,13 @@ def main():
     destino_csv.mkdir(parents=True)
     incluidos = 0
     if not args.sem_dados:
-        for arquivo in sorted(csv_real.glob("*.csv")):
-            shutil.copy2(arquivo, destino_csv / arquivo.name)
+        # rglob: os arquivos mensais ficam em subpasta por ano (2026/, 2027/…),
+        # e COLABORADORES/GESTORES na raiz. Preserva a mesma estrutura no
+        # pacote, que é o que o app procura.
+        for arquivo in sorted(csv_real.rglob("*.csv")):
+            destino = destino_csv / arquivo.relative_to(csv_real)
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(arquivo, destino)
             incluidos += 1
 
     (DESTINO / "LEIA-ME.txt").write_text(LEIA_ME, encoding="utf-8")

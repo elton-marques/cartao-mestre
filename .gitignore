@@ -1,5 +1,6 @@
 # Dados sensíveis (nomes, matrículas, setor de funcionários) — não versionar
 dados/csv/*.csv
+dados/csv/**/*.csv
 
 # Índice do Serena (machine-specific, not shared)
 .serena/

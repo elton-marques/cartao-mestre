@@ -41,7 +41,7 @@ cartao-mestre/
 ├── index.html          ← a página
 ├── js/                 ← o código do dashboard
 ├── design-system/      ← fontes, CSS, ícones
-├── dados/csv/          ← as planilhas reais
+├── dados/csv/          ← as planilhas reais (COLABORADORES/GESTORES na raiz, meses em 2026/)
 ├── dados/csv-exemplo/  ← dados fictícios (fallback, se csv/ estiver vazia)
 └── LEIA-ME.txt         ← instruções curtas para o TI
 ```
@@ -71,14 +71,20 @@ planilhas depois, use `--sem-dados`.
 
 ## Atualizar depois
 
-**Dados do mês** — substituir os arquivos em `dados/csv/` na pasta
+**Dados do mês** — substituir os arquivos em `dados/csv/<ano>/` na pasta
 publicada. A página mostra os novos números no próximo carregamento; nada
-para reiniciar. Os nomes precisam bater exatamente com os atuais, acento e
-tudo (inclusive `FEVEVEIRO.csv`, que vem com essa grafia da origem).
+para reiniciar.
 
-**Mês novo** — mesma coisa: soltar `MAIO.csv` na pasta `dados/csv/` e
+**Mês novo** — soltar o arquivo na pasta do ano (`dados/csv/2026/MAIO.csv`) e
 pronto. O dashboard descobre os meses sozinho a cada carregamento; nada de
-código muda. O nome precisa ser o mês em maiúsculas.
+código muda. O nome do arquivo é o nome do mês, por extenso ou abreviado em
+três letras, maiúsculo ou minúsculo: `MAIO.csv`, `maio.csv`, `MAI.csv`,
+`mai.csv` — todos valem.
+
+**Ano novo** — criar a pasta (`dados/csv/2027/`) e ir colocando os meses lá
+dentro. `COLABORADORES.csv` e `GESTORES.csv` ficam na raiz de `dados/csv/`,
+valendo para todos os anos. Com mais de um ano publicado, o painel passa a
+rotular os meses com o ano ("Janeiro/2026").
 
 **Versão nova do dashboard** — gerar o pacote e recopiar a pasta.
 

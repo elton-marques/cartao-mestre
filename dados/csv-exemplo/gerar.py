@@ -92,12 +92,17 @@ for mat in matriculas:
                           'funcao': random.choice(FUNCOES),
                           'setor': random.choice(SETORES)})
 
-if not os.path.isdir(OUT):
-    os.makedirs(OUT)
+# Os arquivos mensais ficam numa pasta por ano (dados/csv-exemplo/2026/),
+# mesmo layout dos dados reais; COLABORADORES/GESTORES ficam na raiz, porque
+# valem para todos os anos.
+ANO = 2026
+OUT_ANO = os.path.join(OUT, str(ANO))
+if not os.path.isdir(OUT_ANO):
+    os.makedirs(OUT_ANO)
 
 
-def w(path, linhas):
-    io.open(os.path.join(OUT, path), 'w', encoding='utf-8', newline='').write(
+def w(path, linhas, pasta=OUT):
+    io.open(os.path.join(pasta, path), 'w', encoding='utf-8', newline='').write(
         '\r\n'.join(linhas) + '\r\n')
 
 
@@ -126,11 +131,11 @@ def hora_plausivel():
     return u'%02d:%02d:%02d' % (minuto // 60, minuto % 60, seg)
 
 
-MESES = [('JANEIRO.csv', 1, 520), ('FEVEVEIRO.csv', 2, 372),
+MESES = [('JANEIRO.csv', 1, 520), ('FEVEREIRO.csv', 2, 372),
          (u'MARÇO.csv', 3, 448), ('ABRIL.csv', 4, 305)]
 
 for arquivo, mes, n in MESES:
-    dias = (datetime.date(2026, mes + 1, 1) - datetime.date(2026, mes, 1)).days
+    dias = (datetime.date(ANO, mes + 1, 1) - datetime.date(ANO, mes, 1)).days
     linhas = []
     for _ in range(n):
         c = random.choice(colaboradores)
@@ -160,6 +165,7 @@ for arquivo, mes, n in MESES:
         linhas.insert(random.randrange(len(linhas)), random.choice(linhas))
     if arquivo == 'JANEIRO.csv':  # data suspeita (ano < 2020), igual à fonte real
         linhas.insert(4, linhas[4].replace('/2026', '/2006', 1))
-    w(arquivo, [BANNER, BANNER2, u',,,,,,,', HEADER, HEADER2] + linhas + [RODAPE])
+    w(arquivo, [BANNER, BANNER2, u',,,,,,,', HEADER, HEADER2] + linhas + [RODAPE],
+      pasta=OUT_ANO)
 
-print('gerado:', sorted(os.listdir(OUT)))
+print('gerado:', sorted(os.listdir(OUT)), '+', sorted(os.listdir(OUT_ANO)))

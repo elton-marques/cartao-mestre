@@ -18,24 +18,36 @@ const DATA_DIRS = ['../dados/csv/', '../dados/csv-exemplo/'];
 // o dashboard como arquivos estáticos em qualquer lugar (IIS, Apache,
 // nginx), sem serviço nenhum atrás.
 //
-// `nomes` é a lista de grafias aceitas de cada mês, na ordem de preferência.
-// A segunda entrada de fevereiro não é engano: o arquivo-fonte real veio
-// escrito "FEVEVEIRO" e continua valendo, para não quebrar quem já tem esse
-// arquivo no servidor. Março aceita com e sem cedilha.
+// `nomes` são as grafias aceitas de cada mês, na ordem de preferência: nome
+// por extenso, abreviação de três letras e, quando existe, a variação
+// herdada. Maiúsculas/minúsculas não importam — cada nome daqui é testado
+// também em minúsculo e capitalizado (ver grafiasDoMes).
+//
+// FEVEVEIRO é o typo do arquivo-fonte original: os arquivos do repositório já
+// foram renomeados para FEVEREIRO, mas a grafia velha continua aceita para
+// não quebrar servidor que ainda tenha o arquivo antigo. Março vale com e sem
+// cedilha, porque nem todo mundo digita acento em nome de arquivo.
 const MESES_CANONICOS = [
-  { mes: 'Janeiro', nomes: ['JANEIRO'] },
-  { mes: 'Fevereiro', nomes: ['FEVEREIRO', 'FEVEVEIRO'] },
-  { mes: 'Março', nomes: ['MARÇO', 'MARCO'] },
-  { mes: 'Abril', nomes: ['ABRIL'] },
-  { mes: 'Maio', nomes: ['MAIO'] },
-  { mes: 'Junho', nomes: ['JUNHO'] },
-  { mes: 'Julho', nomes: ['JULHO'] },
-  { mes: 'Agosto', nomes: ['AGOSTO'] },
-  { mes: 'Setembro', nomes: ['SETEMBRO'] },
-  { mes: 'Outubro', nomes: ['OUTUBRO'] },
-  { mes: 'Novembro', nomes: ['NOVEMBRO'] },
-  { mes: 'Dezembro', nomes: ['DEZEMBRO'] },
+  { mes: 'Janeiro', nomes: ['JANEIRO', 'JAN'] },
+  { mes: 'Fevereiro', nomes: ['FEVEREIRO', 'FEV', 'FEVEVEIRO'] },
+  { mes: 'Março', nomes: ['MARÇO', 'MARCO', 'MAR'] },
+  { mes: 'Abril', nomes: ['ABRIL', 'ABR'] },
+  { mes: 'Maio', nomes: ['MAIO', 'MAI'] },
+  { mes: 'Junho', nomes: ['JUNHO', 'JUN'] },
+  { mes: 'Julho', nomes: ['JULHO', 'JUL'] },
+  { mes: 'Agosto', nomes: ['AGOSTO', 'AGO'] },
+  { mes: 'Setembro', nomes: ['SETEMBRO', 'SET'] },
+  { mes: 'Outubro', nomes: ['OUTUBRO', 'OUT'] },
+  { mes: 'Novembro', nomes: ['NOVEMBRO', 'NOV'] },
+  { mes: 'Dezembro', nomes: ['DEZEMBRO', 'DEZ'] },
 ];
+
+// Os CSVs ficam em uma pasta por ano dentro do diretório de dados
+// (`dados/csv/2026/JANEIRO.csv`), para que anos novos entrem sem misturar
+// com os antigos. Como não dá pra listar diretório pelo navegador, os anos
+// procurados vão daqui até o ano que vem — mexer nisso só seria necessário
+// se aparecesse dado anterior a 2026.
+const ANO_INICIAL = 2026;
 
 // Meses efetivamente encontrados nesta carga, em ordem de calendário —
 // preenchido por loadAll(). É a fonte única sobre "quais meses existem" para
@@ -82,6 +94,7 @@ async function resolveDataDir() {
       if (!res.ok) continue;
       colaboradoresText = await res.text();
       dataDir = dir;
+      await detectarSensibilidadeAMaiusculas(dir);
       return dir;
     } catch (_) {
       // diretório ausente/inacessível — tenta o próximo
@@ -98,26 +111,103 @@ function parseDateBR(d) {
   return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
 }
 
+// Em servidor Windows/IIS o sistema de arquivos ignora caixa, então
+// `JANEIRO.csv` já atende um pedido por `janeiro.csv` e testar as três
+// variações de cada nome seria o triplo de requisições à toa. Em Linux não:
+// lá a caixa importa e cada grafia precisa ser testada mesmo.
+//
+// Descobrir de que lado estamos custa uma requisição: pedir o
+// COLABORADORES.csv (que sabidamente existe) em minúsculo. Se vier 200, o
+// servidor não diferencia caixa.
+let ignoraCaixa = false;
+
+async function detectarSensibilidadeAMaiusculas(dir) {
+  try {
+    const res = await fetch(encodeURI(dir + COLABORADORES_FILE.toLowerCase()), FETCH_SEM_CACHE);
+    ignoraCaixa = res.ok;
+  } catch (_) {
+    ignoraCaixa = false;
+  }
+}
+
+/** Grafias a testar para um mês: cada nome aceito em maiúsculo, minúsculo e
+ * capitalizado (`JANEIRO`, `janeiro`, `Janeiro`) — só o maiúsculo quando o
+ * servidor ignora caixa. */
+function grafiasDoMes(nomes) {
+  const out = [];
+  for (const nome of nomes) {
+    const maiusculo = nome.toUpperCase();
+    const minusculo = nome.toLowerCase();
+    const capitalizado = minusculo.charAt(0).toUpperCase() + minusculo.slice(1);
+    for (const grafia of ignoraCaixa ? [maiusculo] : [maiusculo, minusculo, capitalizado]) {
+      if (!out.includes(grafia)) out.push(grafia);
+    }
+  }
+  return out;
+}
+
 /**
- * Procura o CSV de um mês no diretório de dados, testando cada grafia aceita.
- * Devolve `{ mes, file, text }` do primeiro que existir, ou null se nenhum
- * existir — mês ausente é situação normal (o ano ainda não acabou), não erro.
+ * Procura o CSV de um mês num diretório, testando cada grafia aceita.
+ * Devolve `{ file, text }` do primeiro que existir, ou null se nenhum existir
+ * — mês ausente é situação normal (o ano ainda não acabou), não erro.
  *
  * Já devolve o conteúdo junto: quem baixou é quem descobriu, então não vale
  * a pena uma segunda requisição só para ler o arquivo que acabou de chegar.
  */
-async function findMonthlyFile({ mes, nomes }) {
-  for (const nome of nomes) {
+async function findMonthlyFile(dir, nomes) {
+  for (const nome of grafiasDoMes(nomes)) {
     const file = `${nome}.csv`;
     try {
-      const res = await fetch(encodeURI(dataDir + file), FETCH_SEM_CACHE);
+      const res = await fetch(encodeURI(dir + file), FETCH_SEM_CACHE);
       if (!res.ok) continue;
-      return { mes, file, text: await res.text() };
+      return { file, text: await res.text() };
     } catch (_) {
       // rede/permissão — trata como ausente e tenta a próxima grafia
     }
   }
   return null;
+}
+
+/** Todos os meses achados num diretório, em ordem de calendário. */
+async function coletarMeses(dir) {
+  const achados = await Promise.all(
+    MESES_CANONICOS.map(async (def, indice) => {
+      const achado = await findMonthlyFile(dir, def.nomes);
+      return achado && { ...achado, mes: def.mes, indice };
+    })
+  );
+  return achados.filter(Boolean);
+}
+
+/**
+ * Descobre onde estão os meses: uma pasta por ano (`2026/`, `2027/`, …) e,
+ * se nenhuma existir, os arquivos soltos direto no diretório de dados —
+ * layout das instalações anteriores a essa mudança, que continua funcionando.
+ *
+ * Pasta de ano tem precedência: se as duas existirem, os arquivos soltos são
+ * ignorados, senão o mesmo mês entraria duas vezes no painel.
+ *
+ * O rótulo do mês só ganha o ano ("Janeiro/2026") quando há mais de um ano
+ * publicado — com um ano só, "Janeiro" é o que a tela inteira já dizia e não
+ * há ambiguidade a resolver.
+ */
+async function descobrirMeses() {
+  const anos = [];
+  for (let ano = ANO_INICIAL; ano <= new Date().getFullYear() + 1; ano++) anos.push(ano);
+
+  const porAno = await Promise.all(
+    anos.map(async (ano) => ({ ano, meses: await coletarMeses(`${dataDir}${ano}/`) }))
+  );
+  const anosComDados = porAno.filter((grupo) => grupo.meses.length);
+
+  if (!anosComDados.length) {
+    return (await coletarMeses(dataDir)).map((m) => ({ ...m, rotulo: m.mes }));
+  }
+
+  const varios = anosComDados.length > 1;
+  return anosComDados.flatMap(({ ano, meses }) =>
+    meses.map((m) => ({ ...m, rotulo: varios ? `${m.mes}/${ano}` : m.mes }))
+  );
 }
 
 function parseMonthlyEvents(text, mes) {
@@ -234,7 +324,7 @@ function buildDataset(monthlyEventArrays, colaboradoresMap, gestoresSet) {
 async function loadAll() {
   await resolveDataDir();
   const [encontrados, colaboradoresMap, gestoresSet] = await Promise.all([
-    Promise.all(MESES_CANONICOS.map(findMonthlyFile)),
+    descobrirMeses(),
     loadColaboradores(),
     loadGestoresSet(),
   ]);
@@ -246,19 +336,18 @@ async function loadAll() {
   const meses = [];
   const monthlyArrays = [];
   for (const achado of encontrados) {
-    if (!achado) continue;
-    const eventos = parseMonthlyEvents(achado.text, achado.mes);
+    const eventos = parseMonthlyEvents(achado.text, achado.rotulo);
     if (!eventos.length) {
       console.warn(`${achado.file} não tem nenhuma liberação em formato reconhecido — mês ignorado.`);
       continue;
     }
-    meses.push(achado.mes);
+    meses.push(achado.rotulo);
     monthlyArrays.push(eventos);
   }
 
   if (!meses.length) {
     throw new Error(
-      `Nenhum CSV mensal encontrado em ${dataDir}. Os arquivos precisam ter o nome do mês em maiúsculas (ex.: JANEIRO.csv).`
+      `Nenhum CSV mensal encontrado em ${dataDir}. Os arquivos ficam numa pasta por ano (ex.: ${dataDir}${ANO_INICIAL}/JANEIRO.csv) e o nome do arquivo é o nome do mês.`
     );
   }
   MESES_ORDEM = meses;
